@@ -4,8 +4,9 @@ import { DayHeader } from './components/DayHeader';
 import { ReviewPanel } from './components/ReviewPanel';
 import { SlotEditor } from './components/SlotEditor';
 import { TimeTable } from './components/TimeTable';
+import { moveSelectedSlotPlans } from './lib/slotMoves';
 import { createEmptyDayPlan, createTimeSlots, getCurrentSlotId } from './lib/timeSlots';
-import type { DayPlan, PersistedAppState, SlotStatus, TimeSlot } from './types';
+import type { DayPlan, PersistedAppState, SlotSelectionMode, SlotStatus, TimeSlot } from './types';
 
 const STORAGE_KEY = 'time-manager-app-state';
 const STORAGE_VERSION = 1;
@@ -88,6 +89,32 @@ function saveState(state: PersistedAppState) {
   }
 }
 
+function getSortedValidSlotIds(slots: TimeSlot[], slotIds: string[]) {
+  const slotIndexById = new Map(slots.map((slot, index) => [slot.id, index]));
+
+  return Array.from(new Set(slotIds))
+    .filter((slotId) => slotIndexById.has(slotId))
+    .sort((firstSlotId, secondSlotId) => {
+      const firstIndex = slotIndexById.get(firstSlotId) ?? 0;
+      const secondIndex = slotIndexById.get(secondSlotId) ?? 0;
+      return firstIndex - secondIndex;
+    });
+}
+
+function getSlotRangeIds(slots: TimeSlot[], firstSlotId: string, secondSlotId: string) {
+  const firstIndex = slots.findIndex((slot) => slot.id === firstSlotId);
+  const secondIndex = slots.findIndex((slot) => slot.id === secondSlotId);
+
+  if (firstIndex === -1 || secondIndex === -1) {
+    return null;
+  }
+
+  const startIndex = Math.min(firstIndex, secondIndex);
+  const endIndex = Math.max(firstIndex, secondIndex);
+
+  return slots.slice(startIndex, endIndex + 1).map((slot) => slot.id);
+}
+
 export function App() {
   const slots = useMemo(() => createTimeSlots(), []);
   const savedState = useMemo(() => loadSavedState(), []);
@@ -98,12 +125,15 @@ export function App() {
 
     return new URLSearchParams(window.location.search).get('view') === 'mini';
   }, []);
+  const initialSelectedSlotId = savedState?.selectedSlotId ?? slots[16].id;
   const [currentDate, setCurrentDate] = useState(() =>
     savedState ? new Date(savedState.currentDate) : new Date(),
   );
   const [dayPlan, setDayPlan] = useState<DayPlan>(() => savedState?.dayPlan ?? createEmptyDayPlan());
-  const [selectedSlotId, setSelectedSlotId] = useState<string>(
-    () => savedState?.selectedSlotId ?? slots[16].id,
+  const [selectedSlotId, setSelectedSlotId] = useState<string>(() => initialSelectedSlotId);
+  const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>(() => [initialSelectedSlotId]);
+  const [selectionAnchorSlotId, setSelectionAnchorSlotId] = useState<string>(
+    () => initialSelectedSlotId,
   );
   const [now, setNow] = useState(() => new Date());
 
@@ -147,6 +177,8 @@ export function App() {
 
         setCurrentDate(new Date(parsedValue.currentDate));
         setSelectedSlotId(parsedValue.selectedSlotId);
+        setSelectedSlotIds([parsedValue.selectedSlotId]);
+        setSelectionAnchorSlotId(parsedValue.selectedSlotId);
         setDayPlan(parsedValue.dayPlan);
       } catch {
         // Ignore malformed external updates and keep the current window usable.
@@ -171,6 +203,65 @@ export function App() {
     }));
   }
 
+  function selectSlot(slotId: string, mode: SlotSelectionMode) {
+    const hasSlot = dayPlan.slots.some((slot) => slot.id === slotId);
+
+    if (!hasSlot) {
+      return;
+    }
+
+    if (mode === 'replace') {
+      setSelectedSlotId(slotId);
+      setSelectedSlotIds([slotId]);
+      setSelectionAnchorSlotId(slotId);
+      return;
+    }
+
+    if (mode === 'range') {
+      const anchorSlotId = dayPlan.slots.some((slot) => slot.id === selectionAnchorSlotId)
+        ? selectionAnchorSlotId
+        : selectedSlotId;
+      const rangeSlotIds = getSlotRangeIds(dayPlan.slots, anchorSlotId, slotId);
+
+      setSelectedSlotId(slotId);
+      setSelectedSlotIds(rangeSlotIds ?? [slotId]);
+      setSelectionAnchorSlotId(anchorSlotId);
+      return;
+    }
+
+    const isAlreadySelected = selectedSlotIds.includes(slotId);
+    const nextSelectedSlotIds =
+      isAlreadySelected && selectedSlotIds.length > 1
+        ? selectedSlotIds.filter((selectedSlotId) => selectedSlotId !== slotId)
+        : getSortedValidSlotIds(dayPlan.slots, [...selectedSlotIds, slotId]);
+    const nextFocusedSlotId = nextSelectedSlotIds.includes(slotId)
+      ? slotId
+      : nextSelectedSlotIds[0];
+
+    setSelectedSlotId(nextFocusedSlotId);
+    setSelectedSlotIds(nextSelectedSlotIds);
+    setSelectionAnchorSlotId(nextFocusedSlotId);
+  }
+
+  function moveSelectedPlans(dragStartSlotId: string, insertIndex: number) {
+    const sourceSlotIds = selectedSlotIds.includes(dragStartSlotId)
+      ? selectedSlotIds
+      : [dragStartSlotId];
+    const moveResult = moveSelectedSlotPlans(dayPlan.slots, sourceSlotIds, insertIndex);
+
+    if (!moveResult.didMove) {
+      return;
+    }
+
+    setDayPlan((previous) => ({
+      ...previous,
+      slots: moveResult.slots,
+    }));
+    setSelectedSlotId(moveResult.movedSlotIds[0]);
+    setSelectedSlotIds(moveResult.movedSlotIds);
+    setSelectionAnchorSlotId(moveResult.movedSlotIds[0]);
+  }
+
   function moveDate(offset: number) {
     setCurrentDate((previous) => {
       const next = new Date(previous);
@@ -186,6 +277,8 @@ export function App() {
   function jumpToCurrentSlot() {
     setCurrentDate(new Date());
     setSelectedSlotId(currentSlotId);
+    setSelectedSlotIds([currentSlotId]);
+    setSelectionAnchorSlotId(currentSlotId);
 
     window.requestAnimationFrame(() => {
       document.querySelector(`[data-slot-id="${currentSlotId}"]`)?.scrollIntoView({
@@ -233,8 +326,10 @@ export function App() {
           slots={slots}
           daySlots={dayPlan.slots}
           selectedSlotId={selectedSlot.id}
+          selectedSlotIds={selectedSlotIds}
           currentSlotId={isViewingToday ? currentSlotId : null}
-          onSelectSlot={setSelectedSlotId}
+          onSelectSlot={selectSlot}
+          onMoveSelectedPlans={moveSelectedPlans}
         />
 
         <aside className="side-panel">

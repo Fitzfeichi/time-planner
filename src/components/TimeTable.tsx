@@ -1,21 +1,162 @@
+import { useState, type DragEvent, type MouseEvent } from 'react';
 import { statusLabels } from '../lib/status';
-import type { TimeSlot } from '../types';
+import type { SlotSelectionMode, TimeSlot } from '../types';
+
+type DropIndicatorPosition = 'before' | 'after';
+
+interface DropIndicator {
+  slotId: string;
+  position: DropIndicatorPosition;
+  insertIndex: number;
+}
 
 interface TimeTableProps {
   slots: TimeSlot[];
   daySlots: TimeSlot[];
   selectedSlotId: string;
+  selectedSlotIds: string[];
   currentSlotId: string | null;
-  onSelectSlot: (slotId: string) => void;
+  onSelectSlot: (slotId: string, mode: SlotSelectionMode) => void;
+  onMoveSelectedPlans: (dragStartSlotId: string, insertIndex: number) => void;
 }
 
 export function TimeTable({
   slots,
   daySlots,
   selectedSlotId,
+  selectedSlotIds,
   currentSlotId,
   onSelectSlot,
+  onMoveSelectedPlans,
 }: TimeTableProps) {
+  const [draggedSlotId, setDraggedSlotId] = useState<string | null>(null);
+  const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
+
+  function clearDragState() {
+    setDraggedSlotId(null);
+    setDropIndicator(null);
+  }
+
+  function scrollListNearEdge(event: DragEvent<HTMLButtonElement>) {
+    const listElement = event.currentTarget.closest('.slot-list');
+
+    if (!(listElement instanceof HTMLElement)) {
+      return;
+    }
+
+    const edgeSize = 56;
+    const scrollStep = 12;
+    const listRect = listElement.getBoundingClientRect();
+    const distanceFromTop = event.clientY - listRect.top;
+    const distanceFromBottom = listRect.bottom - event.clientY;
+
+    if (distanceFromTop < edgeSize) {
+      listElement.scrollTop -= scrollStep;
+    } else if (distanceFromBottom < edgeSize) {
+      listElement.scrollTop += scrollStep;
+    }
+  }
+
+  function getSlotIndex(slotId: string) {
+    return slots.findIndex((slot) => slot.id === slotId);
+  }
+
+  function getDraggedSlotIds(slotId: string) {
+    return selectedSlotIds.includes(slotId) ? selectedSlotIds : [slotId];
+  }
+
+  function isInsertInsideDraggedSelection(insertIndex: number, slotId: string) {
+    const draggedSlotIds = getDraggedSlotIds(slotId);
+    const selectedBoundaryIndexes = new Set<number>();
+
+    draggedSlotIds.forEach((draggedSlotId) => {
+      const selectedIndex = getSlotIndex(draggedSlotId);
+
+      if (selectedIndex !== -1) {
+        selectedBoundaryIndexes.add(selectedIndex);
+        selectedBoundaryIndexes.add(selectedIndex + 1);
+      }
+    });
+
+    return selectedBoundaryIndexes.has(insertIndex);
+  }
+
+  function getDropIndicator(
+    event: DragEvent<HTMLButtonElement>,
+    slotId: string,
+    activeDraggedSlotId = draggedSlotId,
+  ): DropIndicator | null {
+    if (activeDraggedSlotId === null) {
+      return null;
+    }
+
+    const slotIndex = getSlotIndex(slotId);
+
+    if (slotIndex === -1) {
+      return null;
+    }
+
+    const rowRect = event.currentTarget.getBoundingClientRect();
+    const position: DropIndicatorPosition =
+      event.clientY < rowRect.top + rowRect.height / 2 ? 'before' : 'after';
+    const insertIndex = slotIndex + (position === 'after' ? 1 : 0);
+
+    if (isInsertInsideDraggedSelection(insertIndex, activeDraggedSlotId)) {
+      return null;
+    }
+
+    return {
+      slotId,
+      position,
+      insertIndex,
+    };
+  }
+
+  function getSelectionMode(event: MouseEvent<HTMLButtonElement>): SlotSelectionMode {
+    if (event.shiftKey) {
+      return 'range';
+    }
+
+    if (event.ctrlKey || event.metaKey) {
+      return 'toggle';
+    }
+
+    return 'replace';
+  }
+
+  function handleSlotClick(event: MouseEvent<HTMLButtonElement>, slotId: string) {
+    onSelectSlot(slotId, getSelectionMode(event));
+  }
+
+  function handleDragStart(event: DragEvent<HTMLButtonElement>, slotId: string) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', slotId);
+    if (!selectedSlotIds.includes(slotId)) {
+      onSelectSlot(slotId, 'replace');
+    }
+    setDraggedSlotId(slotId);
+  }
+
+  function handleDragOver(event: DragEvent<HTMLButtonElement>, slotId: string) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDropIndicator(getDropIndicator(event, slotId));
+    scrollListNearEdge(event);
+  }
+
+  function handleDrop(event: DragEvent<HTMLButtonElement>, slotId: string) {
+    event.preventDefault();
+
+    const fromSlotId = event.dataTransfer.getData('text/plain') || draggedSlotId;
+    const nextDropIndicator = getDropIndicator(event, slotId, fromSlotId);
+
+    if (fromSlotId !== null && nextDropIndicator !== null) {
+      onMoveSelectedPlans(fromSlotId, nextDropIndicator.insertIndex);
+    }
+
+    clearDragState();
+  }
+
   return (
     <section className="time-table" aria-label="一天时间表">
       <div className="table-head">
@@ -28,23 +169,42 @@ export function TimeTable({
       <div className="slot-list">
         {slots.map((slot) => {
           const daySlot = daySlots.find((item) => item.id === slot.id) ?? slot;
-          const isSelected = daySlot.id === selectedSlotId;
+          const isSelected = selectedSlotIds.includes(daySlot.id);
+          const isFocused = daySlot.id === selectedSlotId;
           const isCurrent = daySlot.id === currentSlotId;
+          const isDraggingSelectedGroup =
+            draggedSlotId !== null && selectedSlotIds.includes(draggedSlotId);
+          const isDragging =
+            daySlot.id === draggedSlotId || (isDraggingSelectedGroup && isSelected);
+          const isDropBefore =
+            dropIndicator?.slotId === daySlot.id && dropIndicator.position === 'before';
+          const isDropAfter =
+            dropIndicator?.slotId === daySlot.id && dropIndicator.position === 'after';
 
           return (
             <button
               type="button"
               key={slot.id}
               data-slot-id={daySlot.id}
+              aria-pressed={isSelected}
+              draggable
               className={[
                 'slot-row',
                 `status-${daySlot.status}`,
                 isSelected ? 'selected' : '',
+                isFocused ? 'focused' : '',
                 isCurrent ? 'current' : '',
+                isDragging ? 'dragging' : '',
+                isDropBefore ? 'drop-before' : '',
+                isDropAfter ? 'drop-after' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
-              onClick={() => onSelectSlot(daySlot.id)}
+              onClick={(event) => handleSlotClick(event, daySlot.id)}
+              onDragStart={(event) => handleDragStart(event, daySlot.id)}
+              onDragOver={(event) => handleDragOver(event, daySlot.id)}
+              onDrop={(event) => handleDrop(event, daySlot.id)}
+              onDragEnd={clearDragState}
             >
               <span className="slot-time">
                 {daySlot.start} - {daySlot.end}

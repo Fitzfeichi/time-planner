@@ -1,5 +1,7 @@
 export type SlotStatus = 'empty' | 'planned' | 'done' | 'changed';
 
+export type SlotSelectionMode = 'replace' | 'toggle' | 'range';
+
 export interface TimeSlot {
   id: string;
   start: string;
