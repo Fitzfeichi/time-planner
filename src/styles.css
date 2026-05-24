@@ -562,6 +562,21 @@ textarea:focus {
   line-height: 1.45;
 }
 
+.mini-task-plan-input {
+  min-height: 116px;
+  max-height: 176px;
+  resize: none;
+  border-color: transparent;
+  background: var(--color-panel);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.mini-task-plan-input:focus {
+  border-color: var(--color-primary-focus);
+}
+
 @supports not (backdrop-filter: blur(20px)) {
   .table-head {
     background: var(--color-page);
@@ -664,6 +679,11 @@ textarea:focus {
   }
 
   .mini-shell .current-task-text {
+    font-size: 15px;
+  }
+
+  .mini-task-plan-input {
+    min-height: 108px;
     font-size: 15px;
   }
 }

@@ -4,6 +4,7 @@ import { DayHeader } from './components/DayHeader';
 import { ReviewPanel } from './components/ReviewPanel';
 import { SlotEditor } from './components/SlotEditor';
 import { TimeTable } from './components/TimeTable';
+import { updateSlotPlanForDate } from './lib/planUpdates';
 import { moveSelectedSlotPlans } from './lib/slotMoves';
 import { createEmptyDayPlan, createTimeSlots, getCurrentSlotId } from './lib/timeSlots';
 import type {
@@ -331,17 +332,13 @@ export function App() {
   }, [currentDateKey]);
 
   useEffect(() => {
-    if (isMiniView) {
-      return;
-    }
-
     saveState({
       version: STORAGE_VERSION,
       currentDate: currentDateKey,
       selectedSlotId,
       plansByDate,
     });
-  }, [currentDateKey, isMiniView, plansByDate, selectedSlotId]);
+  }, [currentDateKey, plansByDate, selectedSlotId]);
 
   useEffect(() => {
     function handleStorage(event: StorageEvent) {
@@ -397,6 +394,12 @@ export function App() {
       ...previous,
       review,
     }));
+  }
+
+  function updateCurrentSlotPlan(plan: string) {
+    setPlansByDate((previous) =>
+      updateSlotPlanForDate(previous, todayDateKey, currentSlotId, plan),
+    );
   }
 
   function selectSlot(slotId: string, mode: SlotSelectionMode) {
@@ -526,8 +529,9 @@ export function App() {
         <CurrentTaskCard
           slot={currentSlot}
           now={now}
-          isViewingToday
+          isViewingToday={true}
           compact
+          onPlanChange={updateCurrentSlotPlan}
           onOpenMainWindow={openMainWindow}
         />
       </main>

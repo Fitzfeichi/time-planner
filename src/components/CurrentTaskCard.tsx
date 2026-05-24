@@ -9,6 +9,7 @@ interface CurrentTaskCardProps {
   onJumpToCurrent?: () => void;
   onOpenMiniWindow?: () => void;
   onOpenMainWindow?: () => void;
+  onPlanChange?: (plan: string) => void;
 }
 
 const timeFormatter = new Intl.DateTimeFormat('zh-CN', {
@@ -24,6 +25,7 @@ export function CurrentTaskCard({
   onJumpToCurrent,
   onOpenMiniWindow,
   onOpenMainWindow,
+  onPlanChange,
 }: CurrentTaskCardProps) {
   const hasPlan = Boolean(slot?.plan.trim());
   const hasActual = Boolean(slot?.actual.trim());
@@ -54,9 +56,14 @@ export function CurrentTaskCard({
               <span className="current-task-time">
                 {slot.start} - {slot.end}
               </span>
-              <p className={hasPlan ? 'current-task-text' : 'current-task-text muted'}>
-                {hasPlan ? slot.plan : '这个时间格还没有填写计划'}
-              </p>
+              <textarea
+                className="mini-task-plan-input"
+                value={slot.plan}
+                onChange={(event) => onPlanChange?.(event.target.value)}
+                placeholder="这个时间格还没有填写计划"
+                aria-label="当前任务计划内容"
+                rows={4}
+              />
             </div>
           </>
         ) : (
