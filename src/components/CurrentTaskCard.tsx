@@ -8,6 +8,7 @@ interface CurrentTaskCardProps {
   compact?: boolean;
   onJumpToCurrent?: () => void;
   onOpenMiniWindow?: () => void;
+  onOpenMainWindow?: () => void;
 }
 
 const timeFormatter = new Intl.DateTimeFormat('zh-CN', {
@@ -22,12 +23,51 @@ export function CurrentTaskCard({
   compact = false,
   onJumpToCurrent,
   onOpenMiniWindow,
+  onOpenMainWindow,
 }: CurrentTaskCardProps) {
   const hasPlan = Boolean(slot?.plan.trim());
   const hasActual = Boolean(slot?.actual.trim());
 
+  if (compact) {
+    return (
+      <section className="current-task-card compact">
+        <button
+          type="button"
+          className="mini-open-main-button"
+          aria-label="打开大窗口"
+          title="打开大窗口"
+          onClick={onOpenMainWindow}
+        >
+          <span className="mini-open-main-icon" aria-hidden="true" />
+        </button>
+
+        {slot && isViewingToday ? (
+          <>
+            <div className="mini-task-head">
+              <strong>{timeFormatter.format(now)}</strong>
+              <span className={`status-pill status-inline status-${slot.status}`}>
+                {statusLabels[slot.status]}
+              </span>
+            </div>
+
+            <div className="current-task-body mini-task-body">
+              <span className="current-task-time">
+                {slot.start} - {slot.end}
+              </span>
+              <p className={hasPlan ? 'current-task-text' : 'current-task-text muted'}>
+                {hasPlan ? slot.plan : '这个时间格还没有填写计划'}
+              </p>
+            </div>
+          </>
+        ) : (
+          <p className="current-task-empty">请回到今天后查看当前任务。</p>
+        )}
+      </section>
+    );
+  }
+
   return (
-    <section className={compact ? 'current-task-card compact' : 'current-task-card'}>
+    <section className="current-task-card">
       <div className="current-task-head">
         <div>
           <p>当前任务</p>
@@ -54,16 +94,14 @@ export function CurrentTaskCard({
         <p className="current-task-empty">当前任务只跟随今天显示。请回到今天后再查看当前半小时任务。</p>
       )}
 
-      {!compact ? (
-        <div className="current-task-actions">
-          <button type="button" onClick={onJumpToCurrent}>
-            跳到当前任务
-          </button>
-          <button type="button" className="primary-button" onClick={onOpenMiniWindow}>
-            打开小窗
-          </button>
-        </div>
-      ) : null}
+      <div className="current-task-actions">
+        <button type="button" onClick={onJumpToCurrent}>
+          跳到当前任务
+        </button>
+        <button type="button" className="primary-button" onClick={onOpenMiniWindow}>
+          打开小窗
+        </button>
+      </div>
     </section>
   );
 }

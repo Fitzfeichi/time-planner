@@ -16,7 +16,7 @@ The current interface includes desktop app-like behavior through Electron: the r
 
 ## Main Files
 
-- `src/App.tsx`: application state and page composition entry point; includes localStorage persistence, current-task refresh, mini mode, and cross-window synchronization.
+- `src/App.tsx`: application state and page composition entry point; includes per-date localStorage persistence, current-task refresh, mini mode, and cross-window synchronization.
 - `src/types.ts`: TypeScript types for time slots, day plans, statuses, and related data.
 - `src/lib/timeSlots.ts`: generates 48 half-hour time slots, creates empty plans, and calculates the current time slot.
 - `src/lib/status.ts`: status values and Chinese display labels.
@@ -54,8 +54,8 @@ Notes:
 
 ## Current Functional Boundaries
 
-- Date switching currently only changes the displayed date at the top.
-- The current version does not yet save separate plans per date. `dayPlan` is a single React state object.
+- Date switching loads the plan and review for the selected date.
+- Plans are saved separately per local date key (`YYYY-MM-DD`) in localStorage.
 - The current time slot is highlighted only when viewing the system's current date.
 - The current-task card refreshes system time every 30 seconds.
 - The current-task mini-window is an Electron `BrowserWindow`; it does not yet provide always-on-top, tray, or notification behavior.
@@ -71,6 +71,14 @@ Notes:
 - Components should keep controlled input mode. `textarea` values are driven by state and passed back to the parent component through `onChange`.
 - Styles are centralized in `src/styles.css`. Keep the interface simple, clear, and desktop-tool-like.
 - Keep Electron integration in `electron/`; React should call desktop capabilities only through the preload bridge and keep browser fallbacks where practical.
+
+## Visual Design Baseline
+
+- Use `DESIGN.md` as the reference for future UI and visual design changes.
+- Apply the reference in a tool-oriented way: keep the planner dense, efficient, and practical instead of turning it into a marketing-style landing page.
+- Prefer a quiet Apple-inspired system: white and off-white surfaces, near-black text, a single blue action color, soft hairline borders, restrained shadows, and clear typography.
+- Do not introduce decorative gradients, extra brand accent colors, large ornamental backgrounds, or broad layout changes that reduce day-to-day planning efficiency.
+- Keep the main window and `?view=mini` current-task mini window visually consistent when making interface changes.
 
 ## Code Style
 
@@ -96,10 +104,68 @@ After code changes, check at least the following:
 - Double-clicking `打开日计划.bat` and `打开当前任务小窗.bat` opens the corresponding Electron window.
 - On narrow screens, the time table and sidebar stack vertically, and text does not overlap.
 
-## Collaboration Habits
 
-- The user mainly communicates in Chinese, so replies should usually be in Chinese.
-- The user may use voice input. If homophones, filler words, or incomplete sentences affect implementation, ask for confirmation before modifying.
-- If the user says "你的理解", "你理解了吗", "明白我的意思了吗", "你懂我意思了吗", or similar expressions, first restate the understanding, then ask at least 3 clarifying questions, and do not start execution directly.
-- Before modifying code, briefly explain in Chinese what will be changed and why.
-- After modifying `AGENTS.md`, explicitly say in the reply: `AGENTS.md 已更新，请过目`.
+
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

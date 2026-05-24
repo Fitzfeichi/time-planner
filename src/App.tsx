@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CurrentTaskCard } from './components/CurrentTaskCard';
 import { DayHeader } from './components/DayHeader';
 import { ReviewPanel } from './components/ReviewPanel';
@@ -6,15 +6,75 @@ import { SlotEditor } from './components/SlotEditor';
 import { TimeTable } from './components/TimeTable';
 import { moveSelectedSlotPlans } from './lib/slotMoves';
 import { createEmptyDayPlan, createTimeSlots, getCurrentSlotId } from './lib/timeSlots';
-import type { DayPlan, PersistedAppState, SlotSelectionMode, SlotStatus, TimeSlot } from './types';
+import type {
+  DayPlan,
+  PersistedAppState,
+  PlansByDate,
+  SlotSelectionMode,
+  SlotStatus,
+  TimeSlot,
+} from './types';
 
 const STORAGE_KEY = 'time-manager-app-state';
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 const EXPECTED_SLOT_COUNT = 48;
 const SLOT_STATUSES: SlotStatus[] = ['empty', 'planned', 'done', 'changed'];
 
+interface LegacyPersistedAppState {
+  version: number;
+  currentDate: string;
+  selectedSlotId: string;
+  dayPlan: DayPlan;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function padDatePart(value: number) {
+  return value.toString().padStart(2, '0');
+}
+
+function getDateKey(date: Date) {
+  return [
+    date.getFullYear(),
+    padDatePart(date.getMonth() + 1),
+    padDatePart(date.getDate()),
+  ].join('-');
+}
+
+function createDateFromKey(dateKey: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+
+  if (match === null) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+
+  return getDateKey(date) === dateKey ? date : null;
+}
+
+function isValidDateKey(value: unknown): value is string {
+  return typeof value === 'string' && createDateFromKey(value) !== null;
+}
+
+function getPreviousDateKey(date: Date) {
+  const previousDate = new Date(date);
+  previousDate.setDate(date.getDate() - 1);
+  return getDateKey(previousDate);
+}
+
+function isValidSlotId(value: unknown): value is string {
+  if (typeof value !== 'string' || !value.startsWith('slot-')) {
+    return false;
+  }
+
+  const slotIndex = Number(value.slice(5));
+  return Number.isInteger(slotIndex) && slotIndex >= 0 && slotIndex < EXPECTED_SLOT_COUNT;
 }
 
 function isSlotStatus(value: unknown): value is SlotStatus {
@@ -43,15 +103,38 @@ function isValidDayPlan(value: unknown): value is DayPlan {
   );
 }
 
+function isValidPlansByDate(value: unknown): value is PlansByDate {
+  return (
+    isRecord(value) &&
+    !Array.isArray(value) &&
+    Object.entries(value).every(
+      ([dateKey, dayPlan]) => isValidDateKey(dateKey) && isValidDayPlan(dayPlan),
+    )
+  );
+}
+
 function isValidSavedState(value: unknown): value is PersistedAppState {
   if (!isRecord(value)) {
     return false;
   }
 
+  return (
+    value.version === STORAGE_VERSION &&
+    isValidDateKey(value.currentDate) &&
+    isValidSlotId(value.selectedSlotId) &&
+    isValidPlansByDate(value.plansByDate)
+  );
+}
+
+function isValidLegacySavedState(value: unknown): value is LegacyPersistedAppState {
+  if (!isRecord(value)) {
+    return false;
+  }
+
   if (
-    value.version !== STORAGE_VERSION ||
+    value.version !== 1 ||
     typeof value.currentDate !== 'string' ||
-    typeof value.selectedSlotId !== 'string' ||
+    !isValidSlotId(value.selectedSlotId) ||
     !isValidDayPlan(value.dayPlan)
   ) {
     return false;
@@ -61,6 +144,21 @@ function isValidSavedState(value: unknown): value is PersistedAppState {
   const hasSelectedSlot = value.dayPlan.slots.some((slot) => slot.id === value.selectedSlotId);
 
   return !Number.isNaN(savedDate.getTime()) && hasSelectedSlot;
+}
+
+function migrateLegacySavedState(state: LegacyPersistedAppState): PersistedAppState {
+  const today = new Date();
+  const todayKey = getDateKey(today);
+  const previousDateKey = getPreviousDateKey(today);
+
+  return {
+    version: STORAGE_VERSION,
+    currentDate: todayKey,
+    selectedSlotId: state.selectedSlotId,
+    plansByDate: {
+      [previousDateKey]: state.dayPlan,
+    },
+  };
 }
 
 function loadSavedState() {
@@ -75,7 +173,15 @@ function loadSavedState() {
     }
 
     const parsedValue: unknown = JSON.parse(savedValue);
-    return isValidSavedState(parsedValue) ? parsedValue : null;
+    if (isValidSavedState(parsedValue)) {
+      return parsedValue;
+    }
+
+    if (isValidLegacySavedState(parsedValue)) {
+      return migrateLegacySavedState(parsedValue);
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -87,6 +193,10 @@ function saveState(state: PersistedAppState) {
   } catch {
     // localStorage may be unavailable or full; the app should keep working in memory.
   }
+}
+
+function getPlanForDate(plansByDate: PlansByDate, dateKey: string) {
+  return plansByDate[dateKey] ?? createEmptyDayPlan();
 }
 
 function getSortedValidSlotIds(slots: TimeSlot[], slotIds: string[]) {
@@ -118,6 +228,13 @@ function getSlotRangeIds(slots: TimeSlot[], firstSlotId: string, secondSlotId: s
 export function App() {
   const slots = useMemo(() => createTimeSlots(), []);
   const savedState = useMemo(() => loadSavedState(), []);
+  const initialDate = useMemo(() => {
+    if (savedState === null) {
+      return new Date();
+    }
+
+    return createDateFromKey(savedState.currentDate) ?? new Date();
+  }, [savedState]);
   const isMiniView = useMemo(() => {
     if (typeof window === 'undefined') {
       return false;
@@ -126,21 +243,26 @@ export function App() {
     return new URLSearchParams(window.location.search).get('view') === 'mini';
   }, []);
   const initialSelectedSlotId = savedState?.selectedSlotId ?? slots[16].id;
-  const [currentDate, setCurrentDate] = useState(() =>
-    savedState ? new Date(savedState.currentDate) : new Date(),
+  const [currentDate, setCurrentDate] = useState(() => initialDate);
+  const [plansByDate, setPlansByDate] = useState<PlansByDate>(
+    () => savedState?.plansByDate ?? { [getDateKey(initialDate)]: createEmptyDayPlan() },
   );
-  const [dayPlan, setDayPlan] = useState<DayPlan>(() => savedState?.dayPlan ?? createEmptyDayPlan());
   const [selectedSlotId, setSelectedSlotId] = useState<string>(() => initialSelectedSlotId);
   const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>(() => [initialSelectedSlotId]);
   const [selectionAnchorSlotId, setSelectionAnchorSlotId] = useState<string>(
     () => initialSelectedSlotId,
   );
   const [now, setNow] = useState(() => new Date());
+  const miniShellRef = useRef<HTMLElement | null>(null);
 
+  const currentDateKey = getDateKey(currentDate);
+  const todayDateKey = getDateKey(now);
+  const dayPlan = getPlanForDate(plansByDate, currentDateKey);
+  const todayPlan = getPlanForDate(plansByDate, todayDateKey);
   const selectedSlot = dayPlan.slots.find((slot) => slot.id === selectedSlotId) ?? dayPlan.slots[0];
   const currentSlotId = getCurrentSlotId(now);
-  const currentSlot = dayPlan.slots.find((slot) => slot.id === currentSlotId) ?? null;
-  const isViewingToday = currentDate.toDateString() === now.toDateString();
+  const currentSlot = todayPlan.slots.find((slot) => slot.id === currentSlotId) ?? null;
+  const isViewingToday = currentDateKey === todayDateKey;
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -151,17 +273,75 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (!isMiniView) {
+      return;
+    }
+
+    document.body.classList.add('mini-mode');
+
+    return () => {
+      document.body.classList.remove('mini-mode');
+    };
+  }, [isMiniView]);
+
+  useEffect(() => {
+    if (!isMiniView || !window.desktopBridge?.resizeMiniWindow) {
+      return;
+    }
+
+    const miniShell = miniShellRef.current;
+    if (miniShell === null) {
+      return;
+    }
+
+    const shellElement: HTMLElement = miniShell;
+    let animationFrameId = 0;
+
+    function requestMiniResize() {
+      window.cancelAnimationFrame(animationFrameId);
+      animationFrameId = window.requestAnimationFrame(() => {
+        const nextHeight = Math.ceil(shellElement.scrollHeight);
+        void window.desktopBridge?.resizeMiniWindow(nextHeight);
+      });
+    }
+
+    requestMiniResize();
+
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(requestMiniResize);
+    resizeObserver?.observe(shellElement);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+      resizeObserver?.disconnect();
+    };
+  }, [currentSlot, isMiniView, now]);
+
+  useEffect(() => {
+    setPlansByDate((previous) => {
+      if (previous[currentDateKey]) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [currentDateKey]: createEmptyDayPlan(),
+      };
+    });
+  }, [currentDateKey]);
+
+  useEffect(() => {
     if (isMiniView) {
       return;
     }
 
     saveState({
       version: STORAGE_VERSION,
-      currentDate: currentDate.toISOString(),
+      currentDate: currentDateKey,
       selectedSlotId,
-      dayPlan,
+      plansByDate,
     });
-  }, [currentDate, dayPlan, isMiniView, selectedSlotId]);
+  }, [currentDateKey, isMiniView, plansByDate, selectedSlotId]);
 
   useEffect(() => {
     function handleStorage(event: StorageEvent) {
@@ -175,11 +355,16 @@ export function App() {
           return;
         }
 
-        setCurrentDate(new Date(parsedValue.currentDate));
+        const parsedCurrentDate = createDateFromKey(parsedValue.currentDate);
+        if (parsedCurrentDate === null) {
+          return;
+        }
+
+        setCurrentDate(parsedCurrentDate);
         setSelectedSlotId(parsedValue.selectedSlotId);
         setSelectedSlotIds([parsedValue.selectedSlotId]);
         setSelectionAnchorSlotId(parsedValue.selectedSlotId);
-        setDayPlan(parsedValue.dayPlan);
+        setPlansByDate(parsedValue.plansByDate);
       } catch {
         // Ignore malformed external updates and keep the current window usable.
       }
@@ -189,15 +374,26 @@ export function App() {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
+  function updatePlanForCurrentDate(updater: (previous: DayPlan) => DayPlan) {
+    setPlansByDate((previous) => {
+      const previousDayPlan = getPlanForDate(previous, currentDateKey);
+
+      return {
+        ...previous,
+        [currentDateKey]: updater(previousDayPlan),
+      };
+    });
+  }
+
   function updateSelectedSlot(nextSlot: TimeSlot) {
-    setDayPlan((previous) => ({
+    updatePlanForCurrentDate((previous) => ({
       ...previous,
       slots: previous.slots.map((slot) => (slot.id === nextSlot.id ? nextSlot : slot)),
     }));
   }
 
   function updateReview(review: string) {
-    setDayPlan((previous) => ({
+    updatePlanForCurrentDate((previous) => ({
       ...previous,
       review,
     }));
@@ -253,7 +449,7 @@ export function App() {
       return;
     }
 
-    setDayPlan((previous) => ({
+    updatePlanForCurrentDate((previous) => ({
       ...previous,
       slots: moveResult.slots,
     }));
@@ -304,10 +500,36 @@ export function App() {
     );
   }
 
+  async function openMainWindow() {
+    if (window.desktopBridge) {
+      await window.desktopBridge.openMainWindow();
+      return;
+    }
+
+    const mainUrl = new URL(window.location.href);
+    mainUrl.searchParams.delete('view');
+
+    const openedWindow = window.open(
+      mainUrl.toString(),
+      'time-manager-main',
+      'popup=yes,width=1180,height=760,left=80,top=60',
+    );
+
+    if (openedWindow === null) {
+      window.location.href = mainUrl.toString();
+    }
+  }
+
   if (isMiniView) {
     return (
-      <main className="mini-shell">
-        <CurrentTaskCard slot={currentSlot} now={now} isViewingToday={isViewingToday} compact />
+      <main className="mini-shell" ref={miniShellRef}>
+        <CurrentTaskCard
+          slot={currentSlot}
+          now={now}
+          isViewingToday
+          compact
+          onOpenMainWindow={openMainWindow}
+        />
       </main>
     );
   }

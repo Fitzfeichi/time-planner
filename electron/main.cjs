@@ -7,8 +7,35 @@ let miniWindow = null;
 const distIndexPath = path.join(__dirname, '..', 'dist', 'index.html');
 const preloadPath = path.join(__dirname, 'preload.cjs');
 const shouldOpenMiniOnly = process.argv.includes('--mini');
+const MINI_WINDOW_WIDTH = 320;
+const MINI_WINDOW_INITIAL_HEIGHT = 230;
+const MINI_WINDOW_MIN_WIDTH = 300;
+const MINI_WINDOW_MIN_HEIGHT = 190;
+const MINI_WINDOW_MAX_HEIGHT = 360;
+const MINI_CONTENT_MIN_HEIGHT = 150;
+const MINI_CONTENT_MAX_HEIGHT = 320;
+
+function clampMiniContentHeight(height) {
+  if (!Number.isFinite(height)) {
+    return MINI_CONTENT_MIN_HEIGHT;
+  }
+
+  return Math.min(
+    MINI_CONTENT_MAX_HEIGHT,
+    Math.max(MINI_CONTENT_MIN_HEIGHT, Math.ceil(height)),
+  );
+}
 
 function createMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+
+    mainWindow.focus();
+    return;
+  }
+
   mainWindow = new BrowserWindow({
     width: 1180,
     height: 760,
@@ -47,13 +74,14 @@ function createMiniWindow() {
   }
 
   miniWindow = new BrowserWindow({
-    width: 380,
-    height: 520,
-    minWidth: 320,
-    minHeight: 360,
+    width: MINI_WINDOW_WIDTH,
+    height: MINI_WINDOW_INITIAL_HEIGHT,
+    minWidth: MINI_WINDOW_MIN_WIDTH,
+    minHeight: MINI_WINDOW_MIN_HEIGHT,
+    maxHeight: MINI_WINDOW_MAX_HEIGHT,
     title: '当前任务',
     autoHideMenuBar: true,
-    backgroundColor: '#fffdf5',
+    backgroundColor: '#f5f5f7',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -74,6 +102,23 @@ function createMiniWindow() {
 
 ipcMain.handle('open-mini-window', () => {
   createMiniWindow();
+});
+
+ipcMain.handle('open-main-window', () => {
+  createMainWindow();
+});
+
+ipcMain.handle('resize-mini-window', (event, requestedContentHeight) => {
+  if (
+    !miniWindow ||
+    miniWindow.isDestroyed() ||
+    BrowserWindow.fromWebContents(event.sender) !== miniWindow
+  ) {
+    return;
+  }
+
+  const [contentWidth] = miniWindow.getContentSize();
+  miniWindow.setContentSize(contentWidth, clampMiniContentHeight(requestedContentHeight));
 });
 
 app.whenReady().then(() => {

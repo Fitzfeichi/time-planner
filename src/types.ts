@@ -16,9 +16,11 @@ export interface DayPlan {
   review: string;
 }
 
+export type PlansByDate = Record<string, DayPlan>;
+
 export interface PersistedAppState {
   version: number;
   currentDate: string;
   selectedSlotId: string;
-  dayPlan: DayPlan;
+  plansByDate: PlansByDate;
 }
