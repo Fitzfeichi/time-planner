@@ -13,7 +13,15 @@ export function updateSlotPlanForDate(
     ...plansByDate,
     [dateKey]: {
       ...dayPlan,
-      slots: dayPlan.slots.map((slot) => (slot.id === slotId ? { ...slot, plan } : slot)),
+      slots: dayPlan.slots.map((slot) =>
+        slot.id === slotId
+          ? {
+              ...slot,
+              plan,
+              status: slot.status === 'empty' && plan.trim() ? 'planned' : slot.status,
+            }
+          : slot,
+      ),
     },
   };
 }

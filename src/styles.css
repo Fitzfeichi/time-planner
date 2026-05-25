@@ -342,10 +342,16 @@ h1 {
   box-shadow: none;
 }
 
-.mini-open-main-button {
+.mini-window-actions {
   position: absolute;
   top: 10px;
   right: 10px;
+  display: flex;
+  gap: 6px;
+}
+
+.mini-open-main-button,
+.mini-pin-button {
   display: inline-flex;
   width: 26px;
   height: 26px;
@@ -358,9 +364,44 @@ h1 {
   padding: 0;
 }
 
-.mini-open-main-button:hover {
+.mini-open-main-button:hover,
+.mini-pin-button:hover {
   border-color: rgba(0, 102, 204, 0.42);
   background: var(--color-primary-soft);
+}
+
+.mini-pin-button.active {
+  border-color: rgba(0, 102, 204, 0.36);
+  background: var(--color-primary-soft);
+}
+
+.mini-pin-icon {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  transform: rotate(-28deg);
+}
+
+.mini-pin-icon::before {
+  position: absolute;
+  top: 1px;
+  left: 3px;
+  width: 6px;
+  height: 7px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px 2px 3px 3px;
+  content: '';
+}
+
+.mini-pin-icon::after {
+  position: absolute;
+  top: 8px;
+  left: 5px;
+  width: 2px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  content: '';
 }
 
 .mini-open-main-icon {
@@ -389,7 +430,7 @@ h1 {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  padding-right: 30px;
+  padding-right: 64px;
 }
 
 .mini-task-head strong {
@@ -665,13 +706,13 @@ textarea:focus {
     padding: 12px;
   }
 
-  .mini-open-main-button {
+  .mini-window-actions {
     top: 8px;
     right: 8px;
   }
 
   .mini-task-head {
-    padding-right: 28px;
+    padding-right: 60px;
   }
 
   .mini-task-head strong {

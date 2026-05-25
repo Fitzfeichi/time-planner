@@ -6,6 +6,7 @@ declare global {
       openMiniWindow: () => Promise<void>;
       openMainWindow: () => Promise<void>;
       resizeMiniWindow: (height: number) => Promise<void>;
+      setMiniAlwaysOnTop: (shouldAlwaysOnTop: boolean) => Promise<boolean>;
     };
   }
 }

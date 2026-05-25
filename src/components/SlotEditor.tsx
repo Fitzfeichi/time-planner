@@ -11,6 +11,7 @@ export function SlotEditor({ slot, onChange }: SlotEditorProps) {
     onChange({
       ...slot,
       [field]: value,
+      status: field === 'plan' && slot.status === 'empty' && value.trim() ? 'planned' : slot.status,
     });
   }
 

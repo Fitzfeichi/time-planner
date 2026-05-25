@@ -254,6 +254,7 @@ export function App() {
     () => initialSelectedSlotId,
   );
   const [now, setNow] = useState(() => new Date());
+  const [isMiniAlwaysOnTop, setIsMiniAlwaysOnTop] = useState(false);
   const miniShellRef = useRef<HTMLElement | null>(null);
 
   const currentDateKey = getDateKey(currentDate);
@@ -523,7 +524,20 @@ export function App() {
     }
   }
 
+  async function toggleMiniAlwaysOnTop() {
+    const nextAlwaysOnTop = !isMiniAlwaysOnTop;
+
+    if (!window.desktopBridge?.setMiniAlwaysOnTop) {
+      return;
+    }
+
+    const appliedAlwaysOnTop = await window.desktopBridge.setMiniAlwaysOnTop(nextAlwaysOnTop);
+    setIsMiniAlwaysOnTop(appliedAlwaysOnTop);
+  }
+
   if (isMiniView) {
+    const canSetMiniAlwaysOnTop = Boolean(window.desktopBridge?.setMiniAlwaysOnTop);
+
     return (
       <main className="mini-shell" ref={miniShellRef}>
         <CurrentTaskCard
@@ -533,6 +547,8 @@ export function App() {
           compact
           onPlanChange={updateCurrentSlotPlan}
           onOpenMainWindow={openMainWindow}
+          isAlwaysOnTop={isMiniAlwaysOnTop}
+          onToggleAlwaysOnTop={canSetMiniAlwaysOnTop ? toggleMiniAlwaysOnTop : undefined}
         />
       </main>
     );

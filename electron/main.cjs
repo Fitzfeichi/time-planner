@@ -121,6 +121,19 @@ ipcMain.handle('resize-mini-window', (event, requestedContentHeight) => {
   miniWindow.setContentSize(contentWidth, clampMiniContentHeight(requestedContentHeight));
 });
 
+ipcMain.handle('set-mini-always-on-top', (event, shouldAlwaysOnTop) => {
+  if (
+    !miniWindow ||
+    miniWindow.isDestroyed() ||
+    BrowserWindow.fromWebContents(event.sender) !== miniWindow
+  ) {
+    return false;
+  }
+
+  miniWindow.setAlwaysOnTop(shouldAlwaysOnTop === true);
+  return miniWindow.isAlwaysOnTop();
+});
+
 app.whenReady().then(() => {
   if (shouldOpenMiniOnly) {
     createMiniWindow();
