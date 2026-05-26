@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CurrentTaskCard } from './components/CurrentTaskCard';
 import { DayHeader } from './components/DayHeader';
 import { ReviewPanel } from './components/ReviewPanel';
 import { SlotEditor } from './components/SlotEditor';
 import { TimeTable } from './components/TimeTable';
+import { isNightFoldSlot, shouldExpandNightFoldForSlots } from './lib/nightFold';
 import { updateSlotPlanForDate } from './lib/planUpdates';
 import { moveSelectedSlotPlans } from './lib/slotMoves';
 import { createEmptyDayPlan, createTimeSlots, getCurrentSlotId } from './lib/timeSlots';
@@ -255,7 +256,7 @@ export function App() {
   );
   const [now, setNow] = useState(() => new Date());
   const [isMiniAlwaysOnTop, setIsMiniAlwaysOnTop] = useState(false);
-  const miniShellRef = useRef<HTMLElement | null>(null);
+  const [isNightFoldManuallyExpanded, setIsNightFoldManuallyExpanded] = useState(false);
 
   const currentDateKey = getDateKey(currentDate);
   const todayDateKey = getDateKey(now);
@@ -265,6 +266,8 @@ export function App() {
   const currentSlotId = getCurrentSlotId(now);
   const currentSlot = todayPlan.slots.find((slot) => slot.id === currentSlotId) ?? null;
   const isViewingToday = currentDateKey === todayDateKey;
+  const isNightFoldExpanded =
+    isNightFoldManuallyExpanded || shouldExpandNightFoldForSlots(dayPlan.slots);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -287,37 +290,15 @@ export function App() {
   }, [isMiniView]);
 
   useEffect(() => {
-    if (!isMiniView || !window.desktopBridge?.resizeMiniWindow) {
+    if (isNightFoldExpanded || !isNightFoldSlot(selectedSlotId)) {
       return;
     }
 
-    const miniShell = miniShellRef.current;
-    if (miniShell === null) {
-      return;
-    }
-
-    const shellElement: HTMLElement = miniShell;
-    let animationFrameId = 0;
-
-    function requestMiniResize() {
-      window.cancelAnimationFrame(animationFrameId);
-      animationFrameId = window.requestAnimationFrame(() => {
-        const nextHeight = Math.ceil(shellElement.scrollHeight);
-        void window.desktopBridge?.resizeMiniWindow(nextHeight);
-      });
-    }
-
-    requestMiniResize();
-
-    const resizeObserver =
-      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(requestMiniResize);
-    resizeObserver?.observe(shellElement);
-
-    return () => {
-      window.cancelAnimationFrame(animationFrameId);
-      resizeObserver?.disconnect();
-    };
-  }, [currentSlot, isMiniView, now]);
+    const firstVisibleWorkSlotId = slots[16].id;
+    setSelectedSlotId(firstVisibleWorkSlotId);
+    setSelectedSlotIds([firstVisibleWorkSlotId]);
+    setSelectionAnchorSlotId(firstVisibleWorkSlotId);
+  }, [isNightFoldExpanded, selectedSlotId, slots]);
 
   useEffect(() => {
     setPlansByDate((previous) => {
@@ -463,6 +444,7 @@ export function App() {
   }
 
   function moveDate(offset: number) {
+    setIsNightFoldManuallyExpanded(false);
     setCurrentDate((previous) => {
       const next = new Date(previous);
       next.setDate(previous.getDate() + offset);
@@ -471,6 +453,7 @@ export function App() {
   }
 
   function goToday() {
+    setIsNightFoldManuallyExpanded(false);
     setCurrentDate(new Date());
   }
 
@@ -479,6 +462,10 @@ export function App() {
     setSelectedSlotId(currentSlotId);
     setSelectedSlotIds([currentSlotId]);
     setSelectionAnchorSlotId(currentSlotId);
+
+    if (isNightFoldSlot(currentSlotId)) {
+      setIsNightFoldManuallyExpanded(true);
+    }
 
     window.requestAnimationFrame(() => {
       document.querySelector(`[data-slot-id="${currentSlotId}"]`)?.scrollIntoView({
@@ -535,20 +522,68 @@ export function App() {
     setIsMiniAlwaysOnTop(appliedAlwaysOnTop);
   }
 
+  async function minimizeMiniWindow() {
+    await window.desktopBridge?.minimizeMiniWindow();
+  }
+
+  async function closeMiniWindow() {
+    await window.desktopBridge?.closeMiniWindow();
+  }
+
   if (isMiniView) {
     const canSetMiniAlwaysOnTop = Boolean(window.desktopBridge?.setMiniAlwaysOnTop);
 
     return (
-      <main className="mini-shell" ref={miniShellRef}>
+      <main className="mini-shell">
+        <div className="mini-titlebar">
+          <button
+            type="button"
+            className="mini-title-button mini-back-button"
+            aria-label="打开大窗口"
+            title="打开大窗口"
+            onClick={openMainWindow}
+          >
+            <span className="mini-back-icon" aria-hidden="true" />
+          </button>
+          <div className="mini-title-actions">
+            {canSetMiniAlwaysOnTop ? (
+              <button
+                type="button"
+                className={`mini-title-button mini-pin-button${isMiniAlwaysOnTop ? ' active' : ''}`}
+                aria-label={isMiniAlwaysOnTop ? '取消置顶' : '置顶小窗'}
+                aria-pressed={isMiniAlwaysOnTop}
+                title={isMiniAlwaysOnTop ? '取消置顶' : '置顶小窗'}
+                onClick={toggleMiniAlwaysOnTop}
+              >
+                <span className="mini-pin-icon" aria-hidden="true" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="mini-title-button mini-minimize-button"
+              aria-label="最小化小窗"
+              title="最小化小窗"
+              onClick={minimizeMiniWindow}
+            >
+              <span aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="mini-title-button mini-close-button"
+              aria-label="关闭小窗"
+              title="关闭小窗"
+              onClick={closeMiniWindow}
+            >
+              <span aria-hidden="true" />
+            </button>
+          </div>
+        </div>
         <CurrentTaskCard
           slot={currentSlot}
           now={now}
           isViewingToday={true}
           compact
           onPlanChange={updateCurrentSlotPlan}
-          onOpenMainWindow={openMainWindow}
-          isAlwaysOnTop={isMiniAlwaysOnTop}
-          onToggleAlwaysOnTop={canSetMiniAlwaysOnTop ? toggleMiniAlwaysOnTop : undefined}
         />
       </main>
     );
@@ -570,8 +605,10 @@ export function App() {
           selectedSlotId={selectedSlot.id}
           selectedSlotIds={selectedSlotIds}
           currentSlotId={isViewingToday ? currentSlotId : null}
+          isNightFoldExpanded={isNightFoldExpanded}
           onSelectSlot={selectSlot}
           onMoveSelectedPlans={moveSelectedPlans}
+          onExpandNightFold={() => setIsNightFoldManuallyExpanded(true)}
         />
 
         <aside className="side-panel">

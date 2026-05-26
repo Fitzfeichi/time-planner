@@ -1,5 +1,12 @@
 const path = require('node:path');
 const { app, BrowserWindow, ipcMain } = require('electron');
+const {
+  MINI_WINDOW_WIDTH,
+  MINI_WINDOW_INITIAL_HEIGHT,
+  MINI_WINDOW_MIN_WIDTH,
+  MINI_WINDOW_MIN_HEIGHT,
+  MINI_WINDOW_MAX_HEIGHT,
+} = require('./miniWindowSizing.cjs');
 
 let mainWindow = null;
 let miniWindow = null;
@@ -7,24 +14,6 @@ let miniWindow = null;
 const distIndexPath = path.join(__dirname, '..', 'dist', 'index.html');
 const preloadPath = path.join(__dirname, 'preload.cjs');
 const shouldOpenMiniOnly = process.argv.includes('--mini');
-const MINI_WINDOW_WIDTH = 320;
-const MINI_WINDOW_INITIAL_HEIGHT = 230;
-const MINI_WINDOW_MIN_WIDTH = 300;
-const MINI_WINDOW_MIN_HEIGHT = 190;
-const MINI_WINDOW_MAX_HEIGHT = 360;
-const MINI_CONTENT_MIN_HEIGHT = 150;
-const MINI_CONTENT_MAX_HEIGHT = 320;
-
-function clampMiniContentHeight(height) {
-  if (!Number.isFinite(height)) {
-    return MINI_CONTENT_MIN_HEIGHT;
-  }
-
-  return Math.min(
-    MINI_CONTENT_MAX_HEIGHT,
-    Math.max(MINI_CONTENT_MIN_HEIGHT, Math.ceil(height)),
-  );
-}
 
 function createMainWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -80,6 +69,7 @@ function createMiniWindow() {
     minHeight: MINI_WINDOW_MIN_HEIGHT,
     maxHeight: MINI_WINDOW_MAX_HEIGHT,
     title: '当前任务',
+    frame: false,
     autoHideMenuBar: true,
     backgroundColor: '#f5f5f7',
     webPreferences: {
@@ -108,19 +98,6 @@ ipcMain.handle('open-main-window', () => {
   createMainWindow();
 });
 
-ipcMain.handle('resize-mini-window', (event, requestedContentHeight) => {
-  if (
-    !miniWindow ||
-    miniWindow.isDestroyed() ||
-    BrowserWindow.fromWebContents(event.sender) !== miniWindow
-  ) {
-    return;
-  }
-
-  const [contentWidth] = miniWindow.getContentSize();
-  miniWindow.setContentSize(contentWidth, clampMiniContentHeight(requestedContentHeight));
-});
-
 ipcMain.handle('set-mini-always-on-top', (event, shouldAlwaysOnTop) => {
   if (
     !miniWindow ||
@@ -132,6 +109,30 @@ ipcMain.handle('set-mini-always-on-top', (event, shouldAlwaysOnTop) => {
 
   miniWindow.setAlwaysOnTop(shouldAlwaysOnTop === true);
   return miniWindow.isAlwaysOnTop();
+});
+
+ipcMain.handle('minimize-mini-window', (event) => {
+  if (
+    !miniWindow ||
+    miniWindow.isDestroyed() ||
+    BrowserWindow.fromWebContents(event.sender) !== miniWindow
+  ) {
+    return;
+  }
+
+  miniWindow.minimize();
+});
+
+ipcMain.handle('close-mini-window', (event) => {
+  if (
+    !miniWindow ||
+    miniWindow.isDestroyed() ||
+    BrowserWindow.fromWebContents(event.sender) !== miniWindow
+  ) {
+    return;
+  }
+
+  miniWindow.close();
 });
 
 app.whenReady().then(() => {

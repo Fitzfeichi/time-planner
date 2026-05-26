@@ -5,8 +5,9 @@ declare global {
     desktopBridge?: {
       openMiniWindow: () => Promise<void>;
       openMainWindow: () => Promise<void>;
-      resizeMiniWindow: (height: number) => Promise<void>;
       setMiniAlwaysOnTop: (shouldAlwaysOnTop: boolean) => Promise<boolean>;
+      minimizeMiniWindow: () => Promise<void>;
+      closeMiniWindow: () => Promise<void>;
     };
   }
 }

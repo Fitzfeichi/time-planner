@@ -1,4 +1,5 @@
 import { useState, type DragEvent, type MouseEvent } from 'react';
+import { isNightFoldSlot } from '../lib/nightFold';
 import { statusLabels } from '../lib/status';
 import type { SlotSelectionMode, TimeSlot } from '../types';
 
@@ -16,8 +17,10 @@ interface TimeTableProps {
   selectedSlotId: string;
   selectedSlotIds: string[];
   currentSlotId: string | null;
+  isNightFoldExpanded: boolean;
   onSelectSlot: (slotId: string, mode: SlotSelectionMode) => void;
   onMoveSelectedPlans: (dragStartSlotId: string, insertIndex: number) => void;
+  onExpandNightFold: () => void;
 }
 
 export function TimeTable({
@@ -26,8 +29,10 @@ export function TimeTable({
   selectedSlotId,
   selectedSlotIds,
   currentSlotId,
+  isNightFoldExpanded,
   onSelectSlot,
   onMoveSelectedPlans,
+  onExpandNightFold,
 }: TimeTableProps) {
   const [draggedSlotId, setDraggedSlotId] = useState<string | null>(null);
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
@@ -168,6 +173,30 @@ export function TimeTable({
 
       <div className="slot-list">
         {slots.map((slot) => {
+          if (!isNightFoldExpanded && isNightFoldSlot(slot.id)) {
+            if (slot.id !== 'slot-1') {
+              return null;
+            }
+
+            const isCurrentFold = currentSlotId !== null && isNightFoldSlot(currentSlotId);
+
+            return (
+              <button
+                type="button"
+                key="night-fold"
+                className={['slot-row', 'night-fold-row', isCurrentFold ? 'current' : '']
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={onExpandNightFold}
+              >
+                <span className="slot-time">00:30 - 08:00</span>
+                <span className="slot-text">夜间时间已折叠</span>
+                <span className="slot-text">已隐藏 15 个时间格，点击展开</span>
+                <span className="status-pill">夜间</span>
+              </button>
+            );
+          }
+
           const daySlot = daySlots.find((item) => item.id === slot.id) ?? slot;
           const isSelected = selectedSlotIds.includes(daySlot.id);
           const isFocused = daySlot.id === selectedSlotId;

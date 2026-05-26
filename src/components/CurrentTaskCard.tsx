@@ -8,10 +8,7 @@ interface CurrentTaskCardProps {
   compact?: boolean;
   onJumpToCurrent?: () => void;
   onOpenMiniWindow?: () => void;
-  onOpenMainWindow?: () => void;
   onPlanChange?: (plan: string) => void;
-  isAlwaysOnTop?: boolean;
-  onToggleAlwaysOnTop?: () => void;
 }
 
 const timeFormatter = new Intl.DateTimeFormat('zh-CN', {
@@ -26,10 +23,7 @@ export function CurrentTaskCard({
   compact = false,
   onJumpToCurrent,
   onOpenMiniWindow,
-  onOpenMainWindow,
   onPlanChange,
-  isAlwaysOnTop = false,
-  onToggleAlwaysOnTop,
 }: CurrentTaskCardProps) {
   const hasPlan = Boolean(slot?.plan.trim());
   const hasActual = Boolean(slot?.actual.trim());
@@ -37,30 +31,6 @@ export function CurrentTaskCard({
   if (compact) {
     return (
       <section className="current-task-card compact">
-        <div className="mini-window-actions">
-          {onToggleAlwaysOnTop ? (
-            <button
-              type="button"
-              className={`mini-pin-button${isAlwaysOnTop ? ' active' : ''}`}
-              aria-label={isAlwaysOnTop ? '取消置顶' : '置顶小窗'}
-              aria-pressed={isAlwaysOnTop}
-              title={isAlwaysOnTop ? '取消置顶' : '置顶小窗'}
-              onClick={onToggleAlwaysOnTop}
-            >
-              <span className="mini-pin-icon" aria-hidden="true" />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="mini-open-main-button"
-            aria-label="打开大窗口"
-            title="打开大窗口"
-            onClick={onOpenMainWindow}
-          >
-            <span className="mini-open-main-icon" aria-hidden="true" />
-          </button>
-        </div>
-
         {slot && isViewingToday ? (
           <>
             <div className="mini-task-head">
