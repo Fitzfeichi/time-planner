@@ -39,7 +39,7 @@ body {
 }
 
 body.mini-mode {
-  min-width: 300px;
+  min-width: 260px;
   height: 100vh;
   min-height: 0;
   overflow: hidden;
@@ -529,7 +529,7 @@ textarea:focus {
 }
 
 .mini-shell {
-  --mini-edge-inset: 10px;
+  --mini-edge-inset: 8px;
 
   display: flex;
   flex-direction: column;
@@ -538,7 +538,7 @@ textarea:focus {
   min-width: 0;
   min-height: 0;
   background: var(--color-page);
-  padding: 0 var(--mini-edge-inset) 10px;
+  padding: 0 var(--mini-edge-inset) 8px;
   overflow: hidden;
 }
 
@@ -546,10 +546,10 @@ textarea:focus {
   order: -1;
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: var(--mini-edge-inset) 44px minmax(0, 1fr) auto var(--mini-edge-inset);
-  height: 42px;
+  grid-template-columns: var(--mini-edge-inset) 36px minmax(0, 1fr) auto var(--mini-edge-inset);
+  height: 34px;
   align-items: center;
-  margin: 0 calc(var(--mini-edge-inset) * -1) 10px;
+  margin: 0 calc(var(--mini-edge-inset) * -1) 6px;
   border-bottom: 1px solid var(--color-hairline-soft);
   background: rgba(251, 251, 253, 0.96);
   -webkit-app-region: drag;
@@ -571,8 +571,8 @@ textarea:focus {
 .mini-title-button {
   position: relative;
   display: inline-flex;
-  width: 44px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -585,7 +585,7 @@ textarea:focus {
 
 .mini-title-button::before {
   position: absolute;
-  inset: 4px;
+  inset: 3px;
   border-radius: 6px;
   background: transparent;
   content: '';
@@ -621,8 +621,8 @@ textarea:focus {
 
 .mini-back-icon {
   position: relative;
-  width: 18px;
-  height: 14px;
+  width: 16px;
+  height: 12px;
   border-top: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
   border-radius: 2px;
@@ -630,9 +630,9 @@ textarea:focus {
 
 .mini-back-icon::before {
   position: absolute;
-  top: 4px;
+  top: 3px;
   left: 0;
-  width: 18px;
+  width: 16px;
   height: 2px;
   border-radius: 999px;
   background: currentColor;
@@ -642,17 +642,17 @@ textarea:focus {
 .mini-minimize-button span,
 .mini-close-button span {
   position: relative;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .mini-minimize-button span::before,
 .mini-close-button span::before,
 .mini-close-button span::after {
   position: absolute;
-  top: 8px;
+  top: 7px;
   left: 2px;
-  width: 14px;
+  width: 12px;
   height: 1.6px;
   border-radius: 999px;
   background: currentColor;
@@ -673,23 +673,23 @@ textarea:focus {
   max-width: 100%;
   min-width: 0;
   min-height: 0;
-  gap: 10px;
+  gap: 7px;
   border: 1px solid var(--color-hairline-soft);
   border-radius: 8px;
   background: var(--color-canvas);
-  padding: 14px;
+  padding: 10px;
 }
 
 .mini-shell .status-pill {
   min-width: 0;
-  padding: 4px 8px;
-  font-size: 12px;
+  padding: 3px 7px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
 .mini-shell .current-task-time {
-  padding: 4px 9px;
-  font-size: 12px;
+  padding: 3px 8px;
+  font-size: 11px;
 }
 
 .mini-task-body {
@@ -709,13 +709,13 @@ textarea:focus {
 
 .mini-task-plan-input {
   flex: 1 1 auto;
-  min-height: 116px;
+  min-height: 74px;
   resize: none;
   border-color: transparent;
   background: var(--color-panel);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  line-height: 1.45;
+  line-height: 1.4;
 }
 
 .mini-task-plan-input:focus {
@@ -804,15 +804,15 @@ textarea:focus {
   .mini-shell {
     --mini-edge-inset: 8px;
 
-    padding: 8px;
+    padding: 0 8px 8px;
   }
 
   .mini-shell .current-task-card {
-    padding: 12px;
+    padding: 10px;
   }
 
   .mini-task-head strong {
-    font-size: 32px;
+    font-size: 30px;
   }
 
   .mini-shell .current-task-text {
@@ -820,7 +820,7 @@ textarea:focus {
   }
 
   .mini-task-plan-input {
-    min-height: 108px;
-    font-size: 15px;
+    min-height: 74px;
+    font-size: 14px;
   }
 }

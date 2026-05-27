@@ -487,7 +487,7 @@ export function App() {
     window.open(
       miniUrl.toString(),
       'time-manager-current-task',
-      'popup=yes,width=380,height=520,left=980,top=80',
+      'popup=yes,width=260,height=230,left=980,top=80',
     );
   }
 
