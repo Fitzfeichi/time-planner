@@ -1,4 +1,5 @@
 const path = require('node:path');
+const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 
 const rootDir = path.resolve(__dirname, '..');
@@ -10,6 +11,7 @@ const releaseDir = path.join(rootDir, 'release');
 const unpackedDir = path.join(releaseDir, 'win-unpacked');
 const stagingDir = path.join(releaseDir, packageName);
 const zipPath = path.join(releaseDir, `${packageName}.zip`);
+const portablePath = path.join(releaseDir, `${productName}-${version}-Windows-便携版.exe`);
 const electronBuilderBin = process.platform === 'win32'
   ? 'node_modules\\.bin\\electron-builder.cmd'
   : path.join(rootDir, 'node_modules', '.bin', 'electron-builder');
@@ -94,3 +96,38 @@ runPowerShell([
 ].join('; '));
 
 console.log(`Windows 免安装试用包已生成: ${zipPath}`);
+console.log('开始生成 Windows 便携版 exe。');
+if (fs.existsSync(portablePath)) {
+  fs.rmSync(portablePath, { force: true });
+}
+
+const portableStartedAt = Date.now();
+run(electronBuilderBin, ['--win', 'portable'], {
+  env: {
+    ...process.env,
+    ELECTRON_BUILDER_CACHE: path.join(rootDir, '.electron-builder-cache'),
+  },
+});
+
+const portableCandidate = fs.readdirSync(releaseDir, { withFileTypes: true })
+  .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.exe'))
+  .map((entry) => {
+    const filePath = path.join(releaseDir, entry.name);
+    return {
+      filePath,
+      modifiedAt: fs.statSync(filePath).mtimeMs,
+    };
+  })
+  .filter((entry) => entry.modifiedAt >= portableStartedAt - 1000)
+  .sort((left, right) => right.modifiedAt - left.modifiedAt)[0];
+
+if (!portableCandidate) {
+  console.error('未找到刚生成的便携版 exe。');
+  process.exit(1);
+}
+
+if (portableCandidate.filePath !== portablePath) {
+  fs.renameSync(portableCandidate.filePath, portablePath);
+}
+
+console.log(`Windows 便携版 exe 已生成: ${portablePath}`);
