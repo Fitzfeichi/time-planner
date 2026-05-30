@@ -19,6 +19,10 @@
     "directories": {
       "output": "release"
     },
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
     "files": [
       "dist/**/*",
       "electron/**/*",

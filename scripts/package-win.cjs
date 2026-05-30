@@ -47,60 +47,34 @@ function run(command, args, options = {}) {
   }
 }
 
-function quotePowerShellPath(value) {
-  return `'${value.replaceAll("'", "''")}'`;
-}
+function resolveReleasePath(targetPath) {
+  const resolvedPath = path.resolve(targetPath);
+  const resolvedReleaseDir = path.resolve(releaseDir);
 
-function runPowerShell(command) {
-  const result = spawnSync('powershell.exe', [
-    '-NoProfile',
-    '-ExecutionPolicy',
-    'Bypass',
-    '-Command',
-    command,
-  ], {
-    cwd: rootDir,
-    stdio: 'inherit',
-    shell: false,
-  });
-
-  if (result.error) {
-    console.error(result.error.message);
-    process.exit(1);
+  if (resolvedPath !== resolvedReleaseDir && !resolvedPath.startsWith(`${resolvedReleaseDir}${path.sep}`)) {
+    throw new Error(`Refusing to remove path outside release: ${resolvedPath}`);
   }
 
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
+  return resolvedPath;
+}
+
+function removeReleasePath(targetPath) {
+  const resolvedPath = resolveReleasePath(targetPath);
+
+  if (fs.existsSync(resolvedPath)) {
+    fs.rmSync(resolvedPath, { recursive: true, force: true });
   }
 }
+
+fs.mkdirSync(releaseDir, { recursive: true });
+removeReleasePath(unpackedDir);
+removeReleasePath(stagingDir);
+removeReleasePath(zipPath);
+removeReleasePath(portablePath);
 
 run('npm.cmd', ['run', 'build']);
-run(electronBuilderBin, ['--win', '--dir'], {
-  env: {
-    ...process.env,
-    ELECTRON_BUILDER_CACHE: path.join(rootDir, '.electron-builder-cache'),
-  },
-});
 
-console.log('Electron 文件夹打包完成，开始生成 zip。');
-runPowerShell([
-  `$unpacked = ${quotePowerShellPath(unpackedDir)}`,
-  `$staging = ${quotePowerShellPath(stagingDir)}`,
-  `$destination = ${quotePowerShellPath(zipPath)}`,
-  'if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }',
-  'if (Test-Path -LiteralPath $destination) { Remove-Item -LiteralPath $destination -Force }',
-  'Copy-Item -LiteralPath $unpacked -Destination $staging -Recurse -Force',
-  'Write-Host "临时免安装目录准备完成，开始压缩。"',
-  '$source = $staging',
-  'Compress-Archive -LiteralPath $source -DestinationPath $destination -Force',
-].join('; '));
-
-console.log(`Windows 免安装试用包已生成: ${zipPath}`);
 console.log('开始生成 Windows 便携版 exe。');
-if (fs.existsSync(portablePath)) {
-  fs.rmSync(portablePath, { force: true });
-}
-
 const portableStartedAt = Date.now();
 run(electronBuilderBin, ['--win', 'portable'], {
   env: {
@@ -129,5 +103,9 @@ if (!portableCandidate) {
 if (portableCandidate.filePath !== portablePath) {
   fs.renameSync(portableCandidate.filePath, portablePath);
 }
+
+removeReleasePath(unpackedDir);
+removeReleasePath(stagingDir);
+removeReleasePath(zipPath);
 
 console.log(`Windows 便携版 exe 已生成: ${portablePath}`);
