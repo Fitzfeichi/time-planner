@@ -21,6 +21,10 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
+# Local agent/design notes
+AGENTS.md
+DESIGN.md
+
 # Editor and OS files
 .vscode/
 .idea/
