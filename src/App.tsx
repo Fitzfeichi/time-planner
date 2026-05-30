@@ -7,6 +7,7 @@ import { TimeTable } from './components/TimeTable';
 import { isNightFoldSlot, shouldExpandNightFoldForSlots } from './lib/nightFold';
 import { updateSlotPlanForDate } from './lib/planUpdates';
 import { moveSelectedSlotPlans } from './lib/slotMoves';
+import { getDesktopBridge } from './lib/desktopBridge';
 import { createEmptyDayPlan, createTimeSlots, getCurrentSlotId } from './lib/timeSlots';
 import type {
   DayPlan,
@@ -244,6 +245,7 @@ export function App() {
 
     return new URLSearchParams(window.location.search).get('view') === 'mini';
   }, []);
+  const desktopBridge = useMemo(() => getDesktopBridge(), []);
   const initialSelectedSlotId = savedState?.selectedSlotId ?? slots[16].id;
   const [currentDate, setCurrentDate] = useState(() => initialDate);
   const [plansByDate, setPlansByDate] = useState<PlansByDate>(
@@ -476,8 +478,8 @@ export function App() {
   }
 
   async function openMiniWindow() {
-    if (window.desktopBridge) {
-      await window.desktopBridge.openMiniWindow();
+    if (desktopBridge) {
+      await desktopBridge.openMiniWindow();
       return;
     }
 
@@ -492,8 +494,8 @@ export function App() {
   }
 
   async function openMainWindow() {
-    if (window.desktopBridge) {
-      await window.desktopBridge.openMainWindow();
+    if (desktopBridge) {
+      await desktopBridge.openMainWindow();
       return;
     }
 
@@ -514,24 +516,24 @@ export function App() {
   async function toggleMiniAlwaysOnTop() {
     const nextAlwaysOnTop = !isMiniAlwaysOnTop;
 
-    if (!window.desktopBridge?.setMiniAlwaysOnTop) {
+    if (!desktopBridge?.setMiniAlwaysOnTop) {
       return;
     }
 
-    const appliedAlwaysOnTop = await window.desktopBridge.setMiniAlwaysOnTop(nextAlwaysOnTop);
+    const appliedAlwaysOnTop = await desktopBridge.setMiniAlwaysOnTop(nextAlwaysOnTop);
     setIsMiniAlwaysOnTop(appliedAlwaysOnTop);
   }
 
   async function minimizeMiniWindow() {
-    await window.desktopBridge?.minimizeMiniWindow();
+    await desktopBridge?.minimizeMiniWindow();
   }
 
   async function closeMiniWindow() {
-    await window.desktopBridge?.closeMiniWindow();
+    await desktopBridge?.closeMiniWindow();
   }
 
   if (isMiniView) {
-    const canSetMiniAlwaysOnTop = Boolean(window.desktopBridge?.setMiniAlwaysOnTop);
+    const canSetMiniAlwaysOnTop = Boolean(desktopBridge?.setMiniAlwaysOnTop);
 
     return (
       <main className="mini-shell">

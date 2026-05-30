@@ -10,7 +10,10 @@
     "desktop:dev": "npm run build && electron .",
     "desktop:start": "npm run build && electron .",
     "package:win": "node scripts/package-win.cjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "package:tauri": "node scripts/package-tauri.cjs"
   },
   "build": {
     "appId": "local.time-block-planner",
@@ -32,8 +35,11 @@
       "signAndEditExecutable": false
     }
   },
-  "dependencies": {},
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.0"
+  },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^5.0.0",

@@ -5,6 +5,8 @@ node_modules/
 dist/
 release/
 .electron-builder-cache/
+src-tauri/gen/
+src-tauri/target/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
