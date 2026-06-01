@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CurrentTaskCard } from './components/CurrentTaskCard';
 import { DayHeader } from './components/DayHeader';
 import { ReviewPanel } from './components/ReviewPanel';
@@ -231,13 +231,7 @@ function getSlotRangeIds(slots: TimeSlot[], firstSlotId: string, secondSlotId: s
 export function App() {
   const slots = useMemo(() => createTimeSlots(), []);
   const savedState = useMemo(() => loadSavedState(), []);
-  const initialDate = useMemo(() => {
-    if (savedState === null) {
-      return new Date();
-    }
-
-    return createDateFromKey(savedState.currentDate) ?? new Date();
-  }, [savedState]);
+  const initialNow = useMemo(() => new Date(), []);
   const isMiniView = useMemo(() => {
     if (typeof window === 'undefined') {
       return false;
@@ -245,8 +239,21 @@ export function App() {
 
     return new URLSearchParams(window.location.search).get('view') === 'mini';
   }, []);
+  const initialDate = useMemo(() => {
+    if (!isMiniView) {
+      return initialNow;
+    }
+
+    if (savedState === null) {
+      return initialNow;
+    }
+
+    return createDateFromKey(savedState.currentDate) ?? initialNow;
+  }, [initialNow, isMiniView, savedState]);
   const desktopBridge = useMemo(() => getDesktopBridge(), []);
-  const initialSelectedSlotId = savedState?.selectedSlotId ?? slots[16].id;
+  const initialSelectedSlotId = isMiniView
+    ? savedState?.selectedSlotId ?? slots[16].id
+    : getCurrentSlotId(initialNow);
   const [currentDate, setCurrentDate] = useState(() => initialDate);
   const [plansByDate, setPlansByDate] = useState<PlansByDate>(
     () => savedState?.plansByDate ?? { [getDateKey(initialDate)]: createEmptyDayPlan() },
@@ -256,9 +263,12 @@ export function App() {
   const [selectionAnchorSlotId, setSelectionAnchorSlotId] = useState<string>(
     () => initialSelectedSlotId,
   );
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => initialNow);
   const [isMiniAlwaysOnTop, setIsMiniAlwaysOnTop] = useState(false);
-  const [isNightFoldManuallyExpanded, setIsNightFoldManuallyExpanded] = useState(false);
+  const [isNightFoldManuallyExpanded, setIsNightFoldManuallyExpanded] = useState(
+    () => !isMiniView && isNightFoldSlot(initialSelectedSlotId),
+  );
+  const hasAutoScrolledToCurrentSlot = useRef(false);
 
   const currentDateKey = getDateKey(currentDate);
   const todayDateKey = getDateKey(now);
@@ -301,6 +311,26 @@ export function App() {
     setSelectedSlotIds([firstVisibleWorkSlotId]);
     setSelectionAnchorSlotId(firstVisibleWorkSlotId);
   }, [isNightFoldExpanded, selectedSlotId, slots]);
+
+  useEffect(() => {
+    if (isMiniView || hasAutoScrolledToCurrentSlot.current) {
+      return;
+    }
+
+    if (isNightFoldSlot(currentSlotId) && !isNightFoldExpanded) {
+      setIsNightFoldManuallyExpanded(true);
+      return;
+    }
+
+    hasAutoScrolledToCurrentSlot.current = true;
+
+    window.requestAnimationFrame(() => {
+      document.querySelector(`[data-slot-id="${currentSlotId}"]`)?.scrollIntoView({
+        block: 'center',
+        behavior: 'auto',
+      });
+    });
+  }, [currentSlotId, isMiniView, isNightFoldExpanded]);
 
   useEffect(() => {
     setPlansByDate((previous) => {

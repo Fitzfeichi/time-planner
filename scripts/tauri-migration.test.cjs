@@ -54,6 +54,14 @@ test('Tauri package script copies the NSIS installer to release', () => {
   assert.match(packageScript, /src-tauri.+bundle.+nsis/s);
 });
 
+test('Tauri development launcher starts the desktop dev shell from the project root', () => {
+  const launcher = readText('打开Tauri开发版.bat');
+
+  assert.match(launcher, /cd \/d "%~dp0"/);
+  assert.match(launcher, /call npm\.cmd run tauri:dev/);
+  assert.match(launcher, /pause/);
+});
+
 test('React uses a shared desktop bridge with Electron and Tauri support', () => {
   const appSource = readText('src/App.tsx');
   const bridgeSource = readText('src/lib/desktopBridge.ts');

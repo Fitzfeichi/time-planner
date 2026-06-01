@@ -238,8 +238,8 @@ export function TimeTable({
               <span className="slot-time">
                 {daySlot.start} - {daySlot.end}
               </span>
-              <span className="slot-text">{daySlot.plan || '未填写计划'}</span>
-              <span className="slot-text">{daySlot.actual || '未填写实际'}</span>
+              <span className="slot-text">{daySlot.plan}</span>
+              <span className="slot-text">{daySlot.actual}</span>
               <span className="status-pill">{statusLabels[daySlot.status]}</span>
             </button>
           );
