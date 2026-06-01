@@ -263,6 +263,7 @@ export function App() {
   const [selectionAnchorSlotId, setSelectionAnchorSlotId] = useState<string>(
     () => initialSelectedSlotId,
   );
+  const [planFocusRequestId, setPlanFocusRequestId] = useState(0);
   const [now, setNow] = useState(() => initialNow);
   const [isMiniAlwaysOnTop, setIsMiniAlwaysOnTop] = useState(false);
   const [isNightFoldManuallyExpanded, setIsNightFoldManuallyExpanded] = useState(
@@ -456,6 +457,11 @@ export function App() {
     setSelectionAnchorSlotId(nextFocusedSlotId);
   }
 
+  function editSlotPlan(slotId: string) {
+    selectSlot(slotId, 'replace');
+    setPlanFocusRequestId((previous) => previous + 1);
+  }
+
   function moveSelectedPlans(dragStartSlotId: string, insertIndex: number) {
     const sourceSlotIds = selectedSlotIds.includes(dragStartSlotId)
       ? selectedSlotIds
@@ -639,6 +645,7 @@ export function App() {
           currentSlotId={isViewingToday ? currentSlotId : null}
           isNightFoldExpanded={isNightFoldExpanded}
           onSelectSlot={selectSlot}
+          onEditSlotPlan={editSlotPlan}
           onMoveSelectedPlans={moveSelectedPlans}
           onExpandNightFold={() => setIsNightFoldManuallyExpanded(true)}
         />
@@ -651,7 +658,11 @@ export function App() {
             onJumpToCurrent={jumpToCurrentSlot}
             onOpenMiniWindow={openMiniWindow}
           />
-          <SlotEditor slot={selectedSlot} onChange={updateSelectedSlot} />
+          <SlotEditor
+            slot={selectedSlot}
+            planFocusRequestId={planFocusRequestId}
+            onChange={updateSelectedSlot}
+          />
           <ReviewPanel value={dayPlan.review} onChange={updateReview} />
         </aside>
       </section>

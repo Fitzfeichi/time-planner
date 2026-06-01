@@ -19,6 +19,7 @@ interface TimeTableProps {
   currentSlotId: string | null;
   isNightFoldExpanded: boolean;
   onSelectSlot: (slotId: string, mode: SlotSelectionMode) => void;
+  onEditSlotPlan: (slotId: string) => void;
   onMoveSelectedPlans: (dragStartSlotId: string, insertIndex: number) => void;
   onExpandNightFold: () => void;
 }
@@ -31,6 +32,7 @@ export function TimeTable({
   currentSlotId,
   isNightFoldExpanded,
   onSelectSlot,
+  onEditSlotPlan,
   onMoveSelectedPlans,
   onExpandNightFold,
 }: TimeTableProps) {
@@ -133,6 +135,14 @@ export function TimeTable({
     onSelectSlot(slotId, getSelectionMode(event));
   }
 
+  function handleSlotDoubleClick(event: MouseEvent<HTMLButtonElement>, slotId: string) {
+    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+
+    onEditSlotPlan(slotId);
+  }
+
   function handleDragStart(event: DragEvent<HTMLButtonElement>, slotId: string) {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', slotId);
@@ -230,6 +240,7 @@ export function TimeTable({
                 .filter(Boolean)
                 .join(' ')}
               onClick={(event) => handleSlotClick(event, daySlot.id)}
+              onDoubleClick={(event) => handleSlotDoubleClick(event, daySlot.id)}
               onDragStart={(event) => handleDragStart(event, daySlot.id)}
               onDragOver={(event) => handleDragOver(event, daySlot.id)}
               onDrop={(event) => handleDrop(event, daySlot.id)}

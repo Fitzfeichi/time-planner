@@ -1,12 +1,32 @@
+import { useEffect, useRef } from 'react';
 import { statusLabels, statusOptions } from '../lib/status';
 import type { SlotStatus, TimeSlot } from '../types';
 
 interface SlotEditorProps {
   slot: TimeSlot;
+  planFocusRequestId: number;
   onChange: (slot: TimeSlot) => void;
 }
 
-export function SlotEditor({ slot, onChange }: SlotEditorProps) {
+export function SlotEditor({ slot, planFocusRequestId, onChange }: SlotEditorProps) {
+  const planInputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (planFocusRequestId === 0) {
+      return;
+    }
+
+    const planInput = planInputRef.current;
+
+    if (planInput === null) {
+      return;
+    }
+
+    const textEnd = planInput.value.length;
+    planInput.focus();
+    planInput.setSelectionRange(textEnd, textEnd);
+  }, [planFocusRequestId]);
+
   function updateField(field: 'plan' | 'actual', value: string) {
     onChange({
       ...slot,
@@ -34,6 +54,7 @@ export function SlotEditor({ slot, onChange }: SlotEditorProps) {
       <label className="field">
         <span>计划内容</span>
         <textarea
+          ref={planInputRef}
           value={slot.plan}
           onChange={(event) => updateField('plan', event.target.value)}
           placeholder="例如：整理今天最重要的三件事"
