@@ -6,7 +6,9 @@ import { ReviewPanel } from './components/ReviewPanel';
 import { SlotEditor } from './components/SlotEditor';
 import { TimeTable } from './components/TimeTable';
 import { isNightFoldSlot, shouldExpandNightFoldForSlots } from './lib/nightFold';
+import { readMiniNeighborPreference } from './lib/miniNeighborPreference';
 import { updateSlotPlanForDate } from './lib/planUpdates';
+import { getSlotNeighbors } from './lib/slotNeighbors';
 import { moveSelectedSlotPlans } from './lib/slotMoves';
 import { getDesktopBridge } from './lib/desktopBridge';
 import { createEmptyDayPlan, createTimeSlots, getCurrentSlotId } from './lib/timeSlots';
@@ -126,7 +128,8 @@ function isValidSavedState(value: unknown): value is PersistedAppState {
     value.version === STORAGE_VERSION &&
     isValidDateKey(value.currentDate) &&
     isValidSlotId(value.selectedSlotId) &&
-    isValidPlansByDate(value.plansByDate)
+    isValidPlansByDate(value.plansByDate) &&
+    (value.showMiniNeighborTasks === undefined || typeof value.showMiniNeighborTasks === 'boolean')
   );
 }
 
@@ -162,6 +165,7 @@ function migrateLegacySavedState(state: LegacyPersistedAppState): PersistedAppSt
     plansByDate: {
       [previousDateKey]: state.dayPlan,
     },
+    showMiniNeighborTasks: false,
   };
 }
 
@@ -266,6 +270,9 @@ export function App() {
   );
   const [planFocusRequestId, setPlanFocusRequestId] = useState(0);
   const [now, setNow] = useState(() => initialNow);
+  const [showMiniNeighborTasks, setShowMiniNeighborTasks] = useState(() =>
+    readMiniNeighborPreference(savedState ?? {}),
+  );
   const [isMiniAlwaysOnTop, setIsMiniAlwaysOnTop] = useState(false);
   const [isNightFoldManuallyExpanded, setIsNightFoldManuallyExpanded] = useState(
     () => !isMiniView && isNightFoldSlot(initialSelectedSlotId),
@@ -278,7 +285,8 @@ export function App() {
   const todayPlan = getPlanForDate(plansByDate, todayDateKey);
   const selectedSlot = dayPlan.slots.find((slot) => slot.id === selectedSlotId) ?? dayPlan.slots[0];
   const currentSlotId = getCurrentSlotId(now);
-  const currentSlot = todayPlan.slots.find((slot) => slot.id === currentSlotId) ?? null;
+  const currentSlotNeighbors = getSlotNeighbors(todayPlan.slots, currentSlotId);
+  const currentSlot = currentSlotNeighbors.current;
   const isViewingToday = currentDateKey === todayDateKey;
   const isNightFoldExpanded =
     isNightFoldManuallyExpanded || shouldExpandNightFoldForSlots(dayPlan.slots);
@@ -353,8 +361,9 @@ export function App() {
       currentDate: currentDateKey,
       selectedSlotId,
       plansByDate,
+      showMiniNeighborTasks,
     });
-  }, [currentDateKey, plansByDate, selectedSlotId]);
+  }, [currentDateKey, plansByDate, selectedSlotId, showMiniNeighborTasks]);
 
   useEffect(() => {
     function handleStorage(event: StorageEvent) {
@@ -378,6 +387,7 @@ export function App() {
         setSelectedSlotIds([parsedValue.selectedSlotId]);
         setSelectionAnchorSlotId(parsedValue.selectedSlotId);
         setPlansByDate(parsedValue.plansByDate);
+        setShowMiniNeighborTasks(readMiniNeighborPreference(parsedValue));
       } catch {
         // Ignore malformed external updates and keep the current window usable.
       }
@@ -416,6 +426,10 @@ export function App() {
     setPlansByDate((previous) =>
       updateSlotPlanForDate(previous, todayDateKey, currentSlotId, plan),
     );
+  }
+
+  function toggleMiniNeighborTasks() {
+    setShowMiniNeighborTasks((previous) => !previous);
   }
 
   function selectSlot(slotId: string, mode: SlotSelectionMode) {
@@ -594,7 +608,20 @@ export function App() {
                 title={isMiniAlwaysOnTop ? '取消置顶' : '置顶小窗'}
                 onClick={toggleMiniAlwaysOnTop}
               >
-                <span className="mini-pin-icon" aria-hidden="true" />
+                <svg
+                  className="mini-pin-icon"
+                  viewBox="0 0 487 691"
+                  fill="currentColor"
+                  stroke="currentColor"
+                  strokeWidth="34"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M 337 41 L 296 27 L 263 21 L 217 23 L 203 27 L 179 41 L 167 55 L 160 70 L 157 84 L 157 100 L 160 115 L 168 135 L 182 157 L 197 175 L 136 283 L 90 294 L 63 308 L 38 330 L 25 351 L 20 368 L 20 380 L 27 394 L 62 423 L 121 460 L 62 654 L 61 666 L 67 671 L 76 669 L 184 491 L 242 513 L 290 525 L 312 524 L 320 520 L 332 508 L 345 478 L 347 445 L 339 410 L 328 385 L 319 372 L 370 255 L 408 252 L 434 242 L 454 225 L 463 209 L 467 193 L 466 169 L 461 152 L 444 122 L 430 105 L 399 77 L 372 59 Z M 95 601 L 97 601 Z M 140 470 L 165 482 L 166 485 L 97 601 L 96 598 L 137 471 Z M 211 188 L 249 215 L 285 234 L 318 246 L 350 254 L 301 367 L 302 379 L 318 407 L 328 443 L 328 467 L 325 481 L 316 498 L 304 507 L 288 506 L 256 498 L 215 484 L 166 463 L 128 443 L 86 417 L 51 391 L 40 380 L 38 375 L 39 367 L 46 351 L 56 338 L 70 326 L 98 311 L 124 304 L 139 303 L 148 298 Z M 182 66 L 194 53 L 208 45 L 226 40 L 258 39 L 296 46 L 327 57 L 352 69 L 374 82 L 401 103 L 421 123 L 435 142 L 444 160 L 449 181 L 448 195 L 443 208 L 434 219 L 419 229 L 404 234 L 382 237 L 346 234 L 322 228 L 274 208 L 226 176 L 202 152 L 189 134 L 180 116 L 175 95 L 176 81 Z"
+                  />
+                </svg>
               </button>
             ) : null}
             <button
@@ -619,6 +646,9 @@ export function App() {
         </div>
         <CurrentTaskCard
           slot={currentSlot}
+          previousSlot={currentSlotNeighbors.previous}
+          nextSlot={currentSlotNeighbors.next}
+          showMiniNeighborTasks={showMiniNeighborTasks}
           now={now}
           isViewingToday={true}
           compact
@@ -658,6 +688,8 @@ export function App() {
             isViewingToday={isViewingToday}
             onJumpToCurrent={jumpToCurrentSlot}
             onOpenMiniWindow={openMiniWindow}
+            showMiniNeighborTasks={showMiniNeighborTasks}
+            onToggleMiniNeighborTasks={toggleMiniNeighborTasks}
           />
           <AppUpdatePanel />
           <SlotEditor

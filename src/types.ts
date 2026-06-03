@@ -23,4 +23,5 @@ export interface PersistedAppState {
   currentDate: string;
   selectedSlotId: string;
   plansByDate: PlansByDate;
+  showMiniNeighborTasks?: boolean;
 }
