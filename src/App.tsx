@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AppUpdatePanel } from './components/AppUpdatePanel';
 import { CurrentTaskCard } from './components/CurrentTaskCard';
 import { DayHeader } from './components/DayHeader';
 import { ReviewPanel } from './components/ReviewPanel';
@@ -658,6 +659,7 @@ export function App() {
             onJumpToCurrent={jumpToCurrentSlot}
             onOpenMiniWindow={openMiniWindow}
           />
+          <AppUpdatePanel />
           <SlotEditor
             slot={selectedSlot}
             planFocusRequestId={planFocusRequestId}

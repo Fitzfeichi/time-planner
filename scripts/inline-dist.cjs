@@ -18,8 +18,10 @@ html = html.replace(
 html = html.replace(
   /<script type="module" crossorigin src="\.\/([^"]+)"><\/script>/,
   (_tag, assetPath) => {
-    const js = fs.readFileSync(path.join(distDir, assetPath), 'utf8');
-    inlineScript = `<script>\n${js.replaceAll('</script', '<\\/script')}\n</script>`;
+    const js = fs
+      .readFileSync(path.join(distDir, assetPath), 'utf8')
+      .replace(/import\((["'])\.\/([^"']+\.js)\1\)/g, 'import($1./assets/$2$1)');
+    inlineScript = `<script type="module">\n${js.replaceAll('</script', '<\\/script')}\n</script>`;
     return '';
   },
 );

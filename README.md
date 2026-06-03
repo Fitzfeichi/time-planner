@@ -45,6 +45,14 @@ npm.cmd run package:win
 
 打包产物会输出到 `release` 目录。这个目录属于本地构建产物，不提交到 GitHub。
 
+生成 Tauri Windows 安装包和自动更新清单：
+
+```powershell
+npm.cmd run package:tauri
+```
+
+Tauri 自动更新使用 GitHub Releases。发布步骤见 `docs/tauri-auto-update.md`。
+
 ## 数据说明
 
 当前版本不做账号登录、云同步或多设备同步。计划和复盘数据保存在当前电脑的 Electron / 浏览器本地存储中；如果清理应用数据、浏览器数据或更换运行环境，记录可能会丢失。

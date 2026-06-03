@@ -6,9 +6,12 @@ const rootDir = path.resolve(__dirname, '..');
 const packageJson = require(path.join(rootDir, 'package.json'));
 const productName = packageJson.build?.productName ?? packageJson.name;
 const version = packageJson.version;
+const githubOwner = 'Fitzfeichi';
+const githubRepo = 'time-planner';
 const releaseDir = path.join(rootDir, 'release');
 const nsisDir = path.join(rootDir, 'src-tauri', 'target', 'release', 'bundle', 'nsis');
-const outputPath = path.join(releaseDir, `${productName}-${version}-Windows-Tauri-安装包.exe`);
+const latestJsonPath = path.join(releaseDir, 'latest.json');
+const signingKeyPath = path.join(releaseDir, 'tauri-updater.key');
 const tauriBin = process.platform === 'win32'
   ? 'node_modules\\.bin\\tauri.cmd'
   : path.join(rootDir, 'node_modules', '.bin', 'tauri');
@@ -77,13 +80,20 @@ function findNewestNsisInstaller(startedAt) {
 
 fs.mkdirSync(releaseDir, { recursive: true });
 
-if (fs.existsSync(outputPath)) {
-  fs.rmSync(outputPath, { force: true });
+if (!fs.existsSync(signingKeyPath)) {
+  console.error(`未找到 Tauri 更新签名私钥: ${signingKeyPath}`);
+  console.error('请先生成或恢复私钥，否则无法生成可自动更新的安装包。');
+  process.exit(1);
 }
 
 const startedAt = Date.now();
 run(tauriBin, ['build', '--bundles', 'nsis'], {
-  env: getEnvWithCargoPath(),
+  env: {
+    ...getEnvWithCargoPath(),
+    TAURI_SIGNING_PRIVATE_KEY: fs.readFileSync(signingKeyPath, 'utf8').trim(),
+    TAURI_SIGNING_PRIVATE_KEY_PATH: signingKeyPath,
+    TAURI_SIGNING_PRIVATE_KEY_PASSWORD: '',
+  },
 });
 
 const installer = findNewestNsisInstaller(startedAt);
@@ -93,5 +103,41 @@ if (!installer) {
   process.exit(1);
 }
 
+const signaturePath = `${installer.filePath}.sig`;
+const outputPath = path.join(releaseDir, path.basename(installer.filePath));
+const outputSignaturePath = `${outputPath}.sig`;
+
+if (!fs.existsSync(signaturePath)) {
+  console.error(`未找到刚生成的 Tauri 更新签名文件: ${signaturePath}`);
+  process.exit(1);
+}
+
+if (fs.existsSync(outputPath)) {
+  fs.rmSync(outputPath, { force: true });
+}
+
+if (fs.existsSync(outputSignaturePath)) {
+  fs.rmSync(outputSignaturePath, { force: true });
+}
+
 fs.copyFileSync(installer.filePath, outputPath);
+fs.copyFileSync(signaturePath, outputSignaturePath);
+
+const assetName = path.basename(outputPath);
+const latestJson = {
+  version,
+  notes: `${productName} ${version}`,
+  pub_date: new Date().toISOString(),
+  platforms: {
+    'windows-x86_64': {
+      signature: fs.readFileSync(signaturePath, 'utf8').trim(),
+      url: `https://github.com/${githubOwner}/${githubRepo}/releases/download/v${version}/${encodeURIComponent(assetName)}`,
+    },
+  },
+};
+
+fs.writeFileSync(latestJsonPath, `${JSON.stringify(latestJson, null, 2)}\n`, 'utf8');
+
 console.log(`Windows Tauri 安装包已生成: ${outputPath}`);
+console.log(`Windows Tauri 更新签名已生成: ${outputSignaturePath}`);
+console.log(`Tauri 更新清单已生成: ${latestJsonPath}`);
