@@ -5,10 +5,24 @@ import type { SlotStatus, TimeSlot } from '../types';
 interface SlotEditorProps {
   slot: TimeSlot;
   planFocusRequestId: number;
+  selectedSlotCount: number;
+  canMergeSelectedSlots: boolean;
+  canSplitMergedRange: boolean;
+  onMergeSelectedSlots: () => void;
+  onSplitMergedRange: () => void;
   onChange: (slot: TimeSlot) => void;
 }
 
-export function SlotEditor({ slot, planFocusRequestId, onChange }: SlotEditorProps) {
+export function SlotEditor({
+  slot,
+  planFocusRequestId,
+  selectedSlotCount,
+  canMergeSelectedSlots,
+  canSplitMergedRange,
+  onMergeSelectedSlots,
+  onSplitMergedRange,
+  onChange,
+}: SlotEditorProps) {
   const planInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -50,6 +64,28 @@ export function SlotEditor({ slot, planFocusRequestId, onChange }: SlotEditorPro
           {slot.start} - {slot.end}
         </strong>
       </div>
+
+      {canSplitMergedRange || selectedSlotCount > 1 ? (
+        <div className="merge-actions">
+          {canSplitMergedRange ? (
+            <button type="button" onClick={onSplitMergedRange}>
+              拆分连续任务
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="primary-button"
+              disabled={!canMergeSelectedSlots}
+              onClick={onMergeSelectedSlots}
+            >
+              合并为连续任务
+            </button>
+          )}
+          {!canSplitMergedRange && selectedSlotCount > 1 && !canMergeSelectedSlots ? (
+            <p>只能合并连续、且尚未合并的时间格。</p>
+          ) : null}
+        </div>
+      ) : null}
 
       <label className="field">
         <span>计划内容</span>

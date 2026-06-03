@@ -11,9 +11,16 @@ export interface TimeSlot {
   status: SlotStatus;
 }
 
+export interface MergedTimeRange {
+  id: string;
+  startSlotId: string;
+  endSlotId: string;
+}
+
 export interface DayPlan {
   slots: TimeSlot[];
   review: string;
+  mergedRanges?: MergedTimeRange[];
 }
 
 export type PlansByDate = Record<string, DayPlan>;

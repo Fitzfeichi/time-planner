@@ -5,6 +5,14 @@ import { DayHeader } from './components/DayHeader';
 import { ReviewPanel } from './components/ReviewPanel';
 import { SlotEditor } from './components/SlotEditor';
 import { TimeTable } from './components/TimeTable';
+import {
+  applyMergedRange,
+  canCreateMergedRange,
+  getMergedRangeForSlot,
+  getMergedRangeSlotIds,
+  hasMergedRangeConflict,
+  removeMergedRangeForSlot,
+} from './lib/mergedRanges';
 import { isNightFoldSlot, shouldExpandNightFoldForSlots } from './lib/nightFold';
 import { readMiniNeighborPreference } from './lib/miniNeighborPreference';
 import { updateSlotPlanForDate } from './lib/planUpdates';
@@ -14,6 +22,7 @@ import { getDesktopBridge } from './lib/desktopBridge';
 import { createEmptyDayPlan, createTimeSlots, getCurrentSlotId } from './lib/timeSlots';
 import type {
   DayPlan,
+  MergedTimeRange,
   PersistedAppState,
   PlansByDate,
   SlotSelectionMode,
@@ -22,7 +31,7 @@ import type {
 } from './types';
 
 const STORAGE_KEY = 'time-manager-app-state';
-const STORAGE_VERSION = 2;
+const STORAGE_VERSION = 3;
 const EXPECTED_SLOT_COUNT = 48;
 const SLOT_STATUSES: SlotStatus[] = ['empty', 'planned', 'done', 'changed'];
 
@@ -31,6 +40,14 @@ interface LegacyPersistedAppState {
   currentDate: string;
   selectedSlotId: string;
   dayPlan: DayPlan;
+}
+
+interface PersistedAppStateV2 {
+  version: 2;
+  currentDate: string;
+  selectedSlotId: string;
+  plansByDate: PlansByDate;
+  showMiniNeighborTasks?: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -99,13 +116,24 @@ function isValidTimeSlot(value: unknown): value is TimeSlot {
   );
 }
 
+function isValidMergedTimeRange(value: unknown): value is MergedTimeRange {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    isValidSlotId(value.startSlotId) &&
+    isValidSlotId(value.endSlotId)
+  );
+}
+
 function isValidDayPlan(value: unknown): value is DayPlan {
   return (
     isRecord(value) &&
     typeof value.review === 'string' &&
     Array.isArray(value.slots) &&
     value.slots.length === EXPECTED_SLOT_COUNT &&
-    value.slots.every(isValidTimeSlot)
+    value.slots.every(isValidTimeSlot) &&
+    (value.mergedRanges === undefined ||
+      (Array.isArray(value.mergedRanges) && value.mergedRanges.every(isValidMergedTimeRange)))
   );
 }
 
@@ -133,6 +161,20 @@ function isValidSavedState(value: unknown): value is PersistedAppState {
   );
 }
 
+function isValidSavedStateV2(value: unknown): value is PersistedAppStateV2 {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    value.version === 2 &&
+    isValidDateKey(value.currentDate) &&
+    isValidSlotId(value.selectedSlotId) &&
+    isValidPlansByDate(value.plansByDate) &&
+    (value.showMiniNeighborTasks === undefined || typeof value.showMiniNeighborTasks === 'boolean')
+  );
+}
+
 function isValidLegacySavedState(value: unknown): value is LegacyPersistedAppState {
   if (!isRecord(value)) {
     return false;
@@ -153,6 +195,30 @@ function isValidLegacySavedState(value: unknown): value is LegacyPersistedAppSta
   return !Number.isNaN(savedDate.getTime()) && hasSelectedSlot;
 }
 
+function normalizeDayPlan(dayPlan: DayPlan): DayPlan {
+  return {
+    ...dayPlan,
+    mergedRanges: dayPlan.mergedRanges ?? [],
+  };
+}
+
+function normalizePlansByDate(plansByDate: PlansByDate) {
+  return Object.fromEntries(
+    Object.entries(plansByDate).map(([dateKey, dayPlan]) => [
+      dateKey,
+      normalizeDayPlan(dayPlan),
+    ]),
+  );
+}
+
+function migrateSavedStateV2(state: PersistedAppStateV2): PersistedAppState {
+  return {
+    ...state,
+    version: STORAGE_VERSION,
+    plansByDate: normalizePlansByDate(state.plansByDate),
+  };
+}
+
 function migrateLegacySavedState(state: LegacyPersistedAppState): PersistedAppState {
   const today = new Date();
   const todayKey = getDateKey(today);
@@ -163,7 +229,7 @@ function migrateLegacySavedState(state: LegacyPersistedAppState): PersistedAppSt
     currentDate: todayKey,
     selectedSlotId: state.selectedSlotId,
     plansByDate: {
-      [previousDateKey]: state.dayPlan,
+      [previousDateKey]: normalizeDayPlan(state.dayPlan),
     },
     showMiniNeighborTasks: false,
   };
@@ -182,7 +248,14 @@ function loadSavedState() {
 
     const parsedValue: unknown = JSON.parse(savedValue);
     if (isValidSavedState(parsedValue)) {
-      return parsedValue;
+      return {
+        ...parsedValue,
+        plansByDate: normalizePlansByDate(parsedValue.plansByDate),
+      };
+    }
+
+    if (isValidSavedStateV2(parsedValue)) {
+      return migrateSavedStateV2(parsedValue);
     }
 
     if (isValidLegacySavedState(parsedValue)) {
@@ -204,7 +277,7 @@ function saveState(state: PersistedAppState) {
 }
 
 function getPlanForDate(plansByDate: PlansByDate, dateKey: string) {
-  return plansByDate[dateKey] ?? createEmptyDayPlan();
+  return normalizeDayPlan(plansByDate[dateKey] ?? createEmptyDayPlan());
 }
 
 function getSortedValidSlotIds(slots: TimeSlot[], slotIds: string[]) {
@@ -231,6 +304,30 @@ function getSlotRangeIds(slots: TimeSlot[], firstSlotId: string, secondSlotId: s
   const endIndex = Math.max(firstIndex, secondIndex);
 
   return slots.slice(startIndex, endIndex + 1).map((slot) => slot.id);
+}
+
+function getSlotWithRangeTime(
+  slots: TimeSlot[],
+  slot: TimeSlot | null,
+  mergedRange: MergedTimeRange | null,
+) {
+  if (slot === null || mergedRange === null) {
+    return slot;
+  }
+
+  const rangeSlotIds = getMergedRangeSlotIds(slots, mergedRange);
+  const startSlot = slots.find((item) => item.id === rangeSlotIds[0]);
+  const endSlot = slots.find((item) => item.id === rangeSlotIds[rangeSlotIds.length - 1]);
+
+  if (startSlot === undefined || endSlot === undefined) {
+    return slot;
+  }
+
+  return {
+    ...slot,
+    start: startSlot.start,
+    end: endSlot.end,
+  };
 }
 
 export function App() {
@@ -286,10 +383,32 @@ export function App() {
   const selectedSlot = dayPlan.slots.find((slot) => slot.id === selectedSlotId) ?? dayPlan.slots[0];
   const currentSlotId = getCurrentSlotId(now);
   const currentSlotNeighbors = getSlotNeighbors(todayPlan.slots, currentSlotId);
-  const currentSlot = currentSlotNeighbors.current;
+  const selectedMergedRange = getMergedRangeForSlot(
+    dayPlan.slots,
+    dayPlan.mergedRanges,
+    selectedSlot.id,
+  );
+  const selectedEditorSlot =
+    getSlotWithRangeTime(dayPlan.slots, selectedSlot, selectedMergedRange) ?? selectedSlot;
+  const currentMergedRange = getMergedRangeForSlot(
+    todayPlan.slots,
+    todayPlan.mergedRanges,
+    currentSlotId,
+  );
+  const currentSlot = getSlotWithRangeTime(
+    todayPlan.slots,
+    currentSlotNeighbors.current,
+    currentMergedRange,
+  );
+  const currentVisibleSlotId = currentMergedRange?.startSlotId ?? currentSlotId;
   const isViewingToday = currentDateKey === todayDateKey;
   const isNightFoldExpanded =
     isNightFoldManuallyExpanded || shouldExpandNightFoldForSlots(dayPlan.slots);
+  const canMergeSelectedSlots = canCreateMergedRange(
+    dayPlan.slots,
+    dayPlan.mergedRanges,
+    selectedSlotIds,
+  );
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -335,12 +454,12 @@ export function App() {
     hasAutoScrolledToCurrentSlot.current = true;
 
     window.requestAnimationFrame(() => {
-      document.querySelector(`[data-slot-id="${currentSlotId}"]`)?.scrollIntoView({
+      document.querySelector(`[data-slot-id="${currentVisibleSlotId}"]`)?.scrollIntoView({
         block: 'center',
         behavior: 'auto',
       });
     });
-  }, [currentSlotId, isMiniView, isNightFoldExpanded]);
+  }, [currentSlotId, currentVisibleSlotId, isMiniView, isNightFoldExpanded]);
 
   useEffect(() => {
     setPlansByDate((previous) => {
@@ -409,9 +528,25 @@ export function App() {
   }
 
   function updateSelectedSlot(nextSlot: TimeSlot) {
+    const mergedRange = getMergedRangeForSlot(dayPlan.slots, dayPlan.mergedRanges, nextSlot.id);
+    const slotIdsToUpdate = new Set(
+      mergedRange === null
+        ? [nextSlot.id]
+        : getMergedRangeSlotIds(dayPlan.slots, mergedRange),
+    );
+
     updatePlanForCurrentDate((previous) => ({
       ...previous,
-      slots: previous.slots.map((slot) => (slot.id === nextSlot.id ? nextSlot : slot)),
+      slots: previous.slots.map((slot) =>
+        slotIdsToUpdate.has(slot.id)
+          ? {
+              ...slot,
+              plan: nextSlot.plan,
+              actual: nextSlot.actual,
+              status: nextSlot.status,
+            }
+          : slot,
+      ),
     }));
   }
 
@@ -478,6 +613,16 @@ export function App() {
   }
 
   function moveSelectedPlans(dragStartSlotId: string, insertIndex: number) {
+    const hasMergedSelection =
+      getMergedRangeForSlot(dayPlan.slots, dayPlan.mergedRanges, dragStartSlotId) !== null ||
+      selectedSlotIds.some(
+        (slotId) => getMergedRangeForSlot(dayPlan.slots, dayPlan.mergedRanges, slotId) !== null,
+      );
+
+    if (hasMergedSelection) {
+      return;
+    }
+
     const sourceSlotIds = selectedSlotIds.includes(dragStartSlotId)
       ? selectedSlotIds
       : [dragStartSlotId];
@@ -494,6 +639,53 @@ export function App() {
     setSelectedSlotId(moveResult.movedSlotIds[0]);
     setSelectedSlotIds(moveResult.movedSlotIds);
     setSelectionAnchorSlotId(moveResult.movedSlotIds[0]);
+  }
+
+  function mergeSelectedSlots() {
+    if (!canMergeSelectedSlots) {
+      return;
+    }
+
+    if (hasMergedRangeConflict(dayPlan.slots, selectedSlotIds, selectedSlotId)) {
+      const shouldMerge = window.confirm(
+        '这些时间格里已有不同内容。合并后会以当前右侧正在编辑的时间格为准，覆盖这一段的计划、实际和状态。确定继续吗？',
+      );
+
+      if (!shouldMerge) {
+        return;
+      }
+    }
+
+    const mergeResult = applyMergedRange(
+      dayPlan.slots,
+      dayPlan.mergedRanges,
+      selectedSlotIds,
+      selectedSlotId,
+    );
+
+    if (!mergeResult.didMerge) {
+      return;
+    }
+
+    updatePlanForCurrentDate((previous) => ({
+      ...previous,
+      slots: mergeResult.slots,
+      mergedRanges: mergeResult.mergedRanges,
+    }));
+    setSelectedSlotIds(getMergedRangeSlotIds(mergeResult.slots, mergeResult.mergedRanges.at(-1)!));
+  }
+
+  function splitSelectedMergedRange() {
+    if (selectedMergedRange === null) {
+      return;
+    }
+
+    updatePlanForCurrentDate((previous) => ({
+      ...previous,
+      mergedRanges: removeMergedRangeForSlot(previous.mergedRanges, selectedSlotId),
+    }));
+    setSelectedSlotIds([selectedSlotId]);
+    setSelectionAnchorSlotId(selectedSlotId);
   }
 
   function moveDate(offset: number) {
@@ -521,7 +713,7 @@ export function App() {
     }
 
     window.requestAnimationFrame(() => {
-      document.querySelector(`[data-slot-id="${currentSlotId}"]`)?.scrollIntoView({
+      document.querySelector(`[data-slot-id="${currentVisibleSlotId}"]`)?.scrollIntoView({
         block: 'center',
         behavior: 'smooth',
       });
@@ -671,6 +863,7 @@ export function App() {
         <TimeTable
           slots={slots}
           daySlots={dayPlan.slots}
+          mergedRanges={dayPlan.mergedRanges}
           selectedSlotId={selectedSlot.id}
           selectedSlotIds={selectedSlotIds}
           currentSlotId={isViewingToday ? currentSlotId : null}
@@ -693,8 +886,13 @@ export function App() {
           />
           <AppUpdatePanel />
           <SlotEditor
-            slot={selectedSlot}
+            slot={selectedEditorSlot}
             planFocusRequestId={planFocusRequestId}
+            selectedSlotCount={selectedSlotIds.length}
+            canMergeSelectedSlots={canMergeSelectedSlots}
+            canSplitMergedRange={selectedMergedRange !== null}
+            onMergeSelectedSlots={mergeSelectedSlots}
+            onSplitMergedRange={splitSelectedMergedRange}
             onChange={updateSelectedSlot}
           />
           <ReviewPanel value={dayPlan.review} onChange={updateReview} />

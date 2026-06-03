@@ -26,6 +26,7 @@ export function createEmptyDayPlan(): DayPlan {
   return {
     slots: createTimeSlots(),
     review: '',
+    mergedRanges: [],
   };
 }
 

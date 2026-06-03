@@ -1,7 +1,8 @@
 import { useState, type DragEvent, type MouseEvent } from 'react';
+import { getMergedRangeForSlot, getMergedRangeSlotIds } from '../lib/mergedRanges';
 import { isNightFoldSlot } from '../lib/nightFold';
 import { statusLabels } from '../lib/status';
-import type { SlotSelectionMode, TimeSlot } from '../types';
+import type { MergedTimeRange, SlotSelectionMode, TimeSlot } from '../types';
 
 type DropIndicatorPosition = 'before' | 'after';
 
@@ -14,6 +15,7 @@ interface DropIndicator {
 interface TimeTableProps {
   slots: TimeSlot[];
   daySlots: TimeSlot[];
+  mergedRanges?: MergedTimeRange[];
   selectedSlotId: string;
   selectedSlotIds: string[];
   currentSlotId: string | null;
@@ -27,6 +29,7 @@ interface TimeTableProps {
 export function TimeTable({
   slots,
   daySlots,
+  mergedRanges = [],
   selectedSlotId,
   selectedSlotIds,
   currentSlotId,
@@ -183,6 +186,16 @@ export function TimeTable({
 
       <div className="slot-list">
         {slots.map((slot) => {
+          const mergedRange = getMergedRangeForSlot(daySlots, mergedRanges, slot.id);
+          const mergedRangeSlotIds =
+            mergedRange === null ? [slot.id] : getMergedRangeSlotIds(daySlots, mergedRange);
+          const isMergedRangeStart =
+            mergedRange === null || mergedRange.startSlotId === slot.id;
+
+          if (!isMergedRangeStart) {
+            return null;
+          }
+
           if (!isNightFoldExpanded && isNightFoldSlot(slot.id)) {
             if (slot.id !== 'slot-1') {
               return null;
@@ -208,9 +221,14 @@ export function TimeTable({
           }
 
           const daySlot = daySlots.find((item) => item.id === slot.id) ?? slot;
-          const isSelected = selectedSlotIds.includes(daySlot.id);
-          const isFocused = daySlot.id === selectedSlotId;
-          const isCurrent = daySlot.id === currentSlotId;
+          const rangeEndSlot =
+            mergedRange === null
+              ? daySlot
+              : daySlots.find((item) => item.id === mergedRange.endSlotId) ?? daySlot;
+          const displayEnd = mergedRange === null ? daySlot.end : rangeEndSlot.end;
+          const isSelected = mergedRangeSlotIds.some((slotId) => selectedSlotIds.includes(slotId));
+          const isFocused = mergedRangeSlotIds.includes(selectedSlotId);
+          const isCurrent = currentSlotId !== null && mergedRangeSlotIds.includes(currentSlotId);
           const isDraggingSelectedGroup =
             draggedSlotId !== null && selectedSlotIds.includes(draggedSlotId);
           const isDragging =
@@ -226,10 +244,11 @@ export function TimeTable({
               key={slot.id}
               data-slot-id={daySlot.id}
               aria-pressed={isSelected}
-              draggable
+              draggable={mergedRange === null}
               className={[
                 'slot-row',
                 `status-${daySlot.status}`,
+                mergedRange === null ? '' : 'merged-range',
                 isSelected ? 'selected' : '',
                 isFocused ? 'focused' : '',
                 isCurrent ? 'current' : '',
@@ -247,7 +266,7 @@ export function TimeTable({
               onDragEnd={clearDragState}
             >
               <span className="slot-time">
-                {daySlot.start} - {daySlot.end}
+                {daySlot.start} - {displayEnd}
               </span>
               <span className="slot-text">{daySlot.plan}</span>
               <span className="slot-text">{daySlot.actual}</span>
