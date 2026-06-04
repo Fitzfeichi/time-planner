@@ -1,4 +1,4 @@
-import { useState, type DragEvent, type MouseEvent } from 'react';
+import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import { getMergedRangeForSlot, getMergedRangeSlotIds } from '../lib/mergedRanges';
 import { isNightFoldSlot } from '../lib/nightFold';
 import { statusLabels } from '../lib/status';
@@ -10,6 +10,14 @@ interface DropIndicator {
   slotId: string;
   position: DropIndicatorPosition;
   insertIndex: number;
+}
+
+interface PointerDragState {
+  isDragging: boolean;
+  pointerId: number;
+  slotId: string;
+  startX: number;
+  startY: number;
 }
 
 interface TimeTableProps {
@@ -41,14 +49,17 @@ export function TimeTable({
 }: TimeTableProps) {
   const [draggedSlotId, setDraggedSlotId] = useState<string | null>(null);
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
+  const pointerDragRef = useRef<PointerDragState | null>(null);
+  const didPointerDragRef = useRef(false);
 
   function clearDragState() {
     setDraggedSlotId(null);
     setDropIndicator(null);
+    pointerDragRef.current = null;
   }
 
-  function scrollListNearEdge(event: DragEvent<HTMLButtonElement>) {
-    const listElement = event.currentTarget.closest('.slot-list');
+  function scrollListNearEdge(sourceElement: HTMLElement, clientY: number) {
+    const listElement = sourceElement.closest('.slot-list');
 
     if (!(listElement instanceof HTMLElement)) {
       return;
@@ -57,8 +68,8 @@ export function TimeTable({
     const edgeSize = 56;
     const scrollStep = 12;
     const listRect = listElement.getBoundingClientRect();
-    const distanceFromTop = event.clientY - listRect.top;
-    const distanceFromBottom = listRect.bottom - event.clientY;
+    const distanceFromTop = clientY - listRect.top;
+    const distanceFromBottom = listRect.bottom - clientY;
 
     if (distanceFromTop < edgeSize) {
       listElement.scrollTop -= scrollStep;
@@ -71,8 +82,18 @@ export function TimeTable({
     return slots.findIndex((slot) => slot.id === slotId);
   }
 
+  function getSlotIdsForSlot(slotId: string) {
+    const mergedRange = getMergedRangeForSlot(daySlots, mergedRanges, slotId);
+
+    return mergedRange === null ? [slotId] : getMergedRangeSlotIds(daySlots, mergedRange);
+  }
+
   function getDraggedSlotIds(slotId: string) {
-    return selectedSlotIds.includes(slotId) ? selectedSlotIds : [slotId];
+    const sourceSlotIds = selectedSlotIds.includes(slotId) ? selectedSlotIds : [slotId];
+
+    return Array.from(new Set(sourceSlotIds.flatMap(getSlotIdsForSlot))).sort(
+      (firstSlotId, secondSlotId) => getSlotIndex(firstSlotId) - getSlotIndex(secondSlotId),
+    );
   }
 
   function isInsertInsideDraggedSelection(insertIndex: number, slotId: string) {
@@ -92,24 +113,27 @@ export function TimeTable({
   }
 
   function getDropIndicator(
-    event: DragEvent<HTMLButtonElement>,
+    targetElement: HTMLButtonElement,
     slotId: string,
+    clientY: number,
     activeDraggedSlotId = draggedSlotId,
   ): DropIndicator | null {
     if (activeDraggedSlotId === null) {
       return null;
     }
 
-    const slotIndex = getSlotIndex(slotId);
+    const targetSlotIds = getSlotIdsForSlot(slotId);
+    const targetStartIndex = getSlotIndex(targetSlotIds[0]);
+    const targetEndIndex = getSlotIndex(targetSlotIds[targetSlotIds.length - 1]);
 
-    if (slotIndex === -1) {
+    if (targetStartIndex === -1 || targetEndIndex === -1) {
       return null;
     }
 
-    const rowRect = event.currentTarget.getBoundingClientRect();
+    const rowRect = targetElement.getBoundingClientRect();
     const position: DropIndicatorPosition =
-      event.clientY < rowRect.top + rowRect.height / 2 ? 'before' : 'after';
-    const insertIndex = slotIndex + (position === 'after' ? 1 : 0);
+      clientY < rowRect.top + rowRect.height / 2 ? 'before' : 'after';
+    const insertIndex = position === 'after' ? targetEndIndex + 1 : targetStartIndex;
 
     if (isInsertInsideDraggedSelection(insertIndex, activeDraggedSlotId)) {
       return null;
@@ -135,6 +159,11 @@ export function TimeTable({
   }
 
   function handleSlotClick(event: MouseEvent<HTMLButtonElement>, slotId: string) {
+    if (didPointerDragRef.current) {
+      didPointerDragRef.current = false;
+      return;
+    }
+
     onSelectSlot(slotId, getSelectionMode(event));
   }
 
@@ -146,30 +175,129 @@ export function TimeTable({
     onEditSlotPlan(slotId);
   }
 
-  function handleDragStart(event: DragEvent<HTMLButtonElement>, slotId: string) {
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', slotId);
-    if (!selectedSlotIds.includes(slotId)) {
-      onSelectSlot(slotId, 'replace');
+  function getPointerTargetSlot(clientX: number, clientY: number) {
+    const targetElement = document.elementFromPoint(clientX, clientY);
+
+    if (!(targetElement instanceof HTMLElement)) {
+      return null;
     }
-    setDraggedSlotId(slotId);
+
+    const targetButton = targetElement.closest<HTMLButtonElement>('.slot-row[data-slot-id]');
+
+    if (targetButton === null) {
+      return null;
+    }
+
+    const slotId = targetButton.dataset.slotId;
+
+    if (slotId === undefined) {
+      return null;
+    }
+
+    return {
+      slotId,
+      targetButton,
+    };
   }
 
-  function handleDragOver(event: DragEvent<HTMLButtonElement>, slotId: string) {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    setDropIndicator(getDropIndicator(event, slotId));
-    scrollListNearEdge(event);
+  function getPointerDropIndicator(event: PointerEvent<HTMLButtonElement>) {
+    const pointerDrag = pointerDragRef.current;
+
+    if (pointerDrag === null) {
+      return null;
+    }
+
+    const targetSlot = getPointerTargetSlot(event.clientX, event.clientY);
+
+    if (targetSlot === null) {
+      return null;
+    }
+
+    return getDropIndicator(
+      targetSlot.targetButton,
+      targetSlot.slotId,
+      event.clientY,
+      pointerDrag.slotId,
+    );
   }
 
-  function handleDrop(event: DragEvent<HTMLButtonElement>, slotId: string) {
+  function handlePointerDown(event: PointerEvent<HTMLButtonElement>, slotId: string) {
+    if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+
+    pointerDragRef.current = {
+      isDragging: false,
+      pointerId: event.pointerId,
+      slotId,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handlePointerMove(event: PointerEvent<HTMLButtonElement>) {
+    const pointerDrag = pointerDragRef.current;
+
+    if (pointerDrag === null || pointerDrag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const dragDistance = Math.hypot(
+      event.clientX - pointerDrag.startX,
+      event.clientY - pointerDrag.startY,
+    );
+
+    if (!pointerDrag.isDragging && dragDistance < 6) {
+      return;
+    }
+
+    if (!pointerDrag.isDragging) {
+      pointerDrag.isDragging = true;
+      didPointerDragRef.current = true;
+
+      if (!selectedSlotIds.includes(pointerDrag.slotId)) {
+        onSelectSlot(pointerDrag.slotId, 'replace');
+      }
+
+      setDraggedSlotId(pointerDrag.slotId);
+    }
+
     event.preventDefault();
+    setDropIndicator(getPointerDropIndicator(event));
+    scrollListNearEdge(event.currentTarget, event.clientY);
+  }
 
-    const fromSlotId = event.dataTransfer.getData('text/plain') || draggedSlotId;
-    const nextDropIndicator = getDropIndicator(event, slotId, fromSlotId);
+  function handlePointerUp(event: PointerEvent<HTMLButtonElement>) {
+    const pointerDrag = pointerDragRef.current;
 
-    if (fromSlotId !== null && nextDropIndicator !== null) {
-      onMoveSelectedPlans(fromSlotId, nextDropIndicator.insertIndex);
+    if (pointerDrag === null || pointerDrag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (pointerDrag.isDragging) {
+      event.preventDefault();
+      const nextDropIndicator = getPointerDropIndicator(event);
+
+      if (nextDropIndicator !== null) {
+        onMoveSelectedPlans(pointerDrag.slotId, nextDropIndicator.insertIndex);
+      }
+
+      window.setTimeout(() => {
+        didPointerDragRef.current = false;
+      }, 0);
+    }
+
+    clearDragState();
+  }
+
+  function handlePointerCancel(event: PointerEvent<HTMLButtonElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
     }
 
     clearDragState();
@@ -244,7 +372,6 @@ export function TimeTable({
               key={slot.id}
               data-slot-id={daySlot.id}
               aria-pressed={isSelected}
-              draggable={mergedRange === null}
               className={[
                 'slot-row',
                 `status-${daySlot.status}`,
@@ -260,10 +387,10 @@ export function TimeTable({
                 .join(' ')}
               onClick={(event) => handleSlotClick(event, daySlot.id)}
               onDoubleClick={(event) => handleSlotDoubleClick(event, daySlot.id)}
-              onDragStart={(event) => handleDragStart(event, daySlot.id)}
-              onDragOver={(event) => handleDragOver(event, daySlot.id)}
-              onDrop={(event) => handleDrop(event, daySlot.id)}
-              onDragEnd={clearDragState}
+              onPointerDown={(event) => handlePointerDown(event, daySlot.id)}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
             >
               <span className="slot-time">
                 {daySlot.start} - {displayEnd}

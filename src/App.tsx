@@ -16,7 +16,7 @@ import {
 import { isNightFoldSlot, shouldExpandNightFoldForSlots } from './lib/nightFold';
 import { readMiniNeighborPreference } from './lib/miniNeighborPreference';
 import { updateSlotPlanForDate } from './lib/planUpdates';
-import { getSlotNeighbors } from './lib/slotNeighbors';
+import { getTaskBlockNeighbors } from './lib/slotNeighbors';
 import { moveSelectedSlotPlans } from './lib/slotMoves';
 import { getDesktopBridge } from './lib/desktopBridge';
 import { createEmptyDayPlan, createTimeSlots, getCurrentSlotId } from './lib/timeSlots';
@@ -382,7 +382,11 @@ export function App() {
   const todayPlan = getPlanForDate(plansByDate, todayDateKey);
   const selectedSlot = dayPlan.slots.find((slot) => slot.id === selectedSlotId) ?? dayPlan.slots[0];
   const currentSlotId = getCurrentSlotId(now);
-  const currentSlotNeighbors = getSlotNeighbors(todayPlan.slots, currentSlotId);
+  const currentSlotNeighbors = getTaskBlockNeighbors(
+    todayPlan.slots,
+    currentSlotId,
+    todayPlan.mergedRanges,
+  );
   const selectedMergedRange = getMergedRangeForSlot(
     dayPlan.slots,
     dayPlan.mergedRanges,
@@ -395,11 +399,7 @@ export function App() {
     todayPlan.mergedRanges,
     currentSlotId,
   );
-  const currentSlot = getSlotWithRangeTime(
-    todayPlan.slots,
-    currentSlotNeighbors.current,
-    currentMergedRange,
-  );
+  const currentSlot = currentSlotNeighbors.current;
   const currentVisibleSlotId = currentMergedRange?.startSlotId ?? currentSlotId;
   const isViewingToday = currentDateKey === todayDateKey;
   const isNightFoldExpanded =
@@ -613,20 +613,15 @@ export function App() {
   }
 
   function moveSelectedPlans(dragStartSlotId: string, insertIndex: number) {
-    const hasMergedSelection =
-      getMergedRangeForSlot(dayPlan.slots, dayPlan.mergedRanges, dragStartSlotId) !== null ||
-      selectedSlotIds.some(
-        (slotId) => getMergedRangeForSlot(dayPlan.slots, dayPlan.mergedRanges, slotId) !== null,
-      );
-
-    if (hasMergedSelection) {
-      return;
-    }
-
     const sourceSlotIds = selectedSlotIds.includes(dragStartSlotId)
       ? selectedSlotIds
       : [dragStartSlotId];
-    const moveResult = moveSelectedSlotPlans(dayPlan.slots, sourceSlotIds, insertIndex);
+    const moveResult = moveSelectedSlotPlans(
+      dayPlan.slots,
+      sourceSlotIds,
+      insertIndex,
+      dayPlan.mergedRanges,
+    );
 
     if (!moveResult.didMove) {
       return;
@@ -635,6 +630,7 @@ export function App() {
     updatePlanForCurrentDate((previous) => ({
       ...previous,
       slots: moveResult.slots,
+      mergedRanges: moveResult.mergedRanges,
     }));
     setSelectedSlotId(moveResult.movedSlotIds[0]);
     setSelectedSlotIds(moveResult.movedSlotIds);

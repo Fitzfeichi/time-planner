@@ -242,7 +242,7 @@ h1 {
 .slot-row.merged-range {
   border-left: 4px solid rgba(0, 102, 204, 0.36);
   background: linear-gradient(90deg, rgba(0, 102, 204, 0.08), var(--color-canvas) 34%);
-  cursor: pointer;
+  cursor: grab;
 }
 
 .slot-row.merged-range:hover,
