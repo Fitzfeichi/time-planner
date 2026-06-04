@@ -4,10 +4,10 @@ const { spawnSync } = require('node:child_process');
 
 const rootDir = path.resolve(__dirname, '..');
 const packageJson = require(path.join(rootDir, 'package.json'));
-const productName = packageJson.build?.productName ?? packageJson.name;
+const tauriConfig = require(path.join(rootDir, 'src-tauri', 'tauri.conf.json'));
+const productName = tauriConfig.productName ?? packageJson.name;
 const version = packageJson.version;
-const githubOwner = 'Fitzfeichi';
-const githubRepo = 'time-planner';
+const updateMirrorBaseUrl = 'https://time-planner-update-8976988489.oss-cn-shanghai.aliyuncs.com';
 const releaseDir = path.join(rootDir, 'release');
 const nsisDir = path.join(rootDir, 'src-tauri', 'target', 'release', 'bundle', 'nsis');
 const latestJsonPath = path.join(releaseDir, 'latest.json');
@@ -131,7 +131,7 @@ const latestJson = {
   platforms: {
     'windows-x86_64': {
       signature: fs.readFileSync(signaturePath, 'utf8').trim(),
-      url: `https://github.com/${githubOwner}/${githubRepo}/releases/download/v${version}/${encodeURIComponent(assetName)}`,
+      url: `${updateMirrorBaseUrl}/${encodeURIComponent(assetName)}`,
     },
   },
 };

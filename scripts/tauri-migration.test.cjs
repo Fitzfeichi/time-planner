@@ -5,17 +5,39 @@ const test = require('node:test');
 
 const rootDir = path.resolve(__dirname, '..');
 const packageJson = require(path.join(rootDir, 'package.json'));
+const legacyShellName = ['elec', 'tron'].join('');
+const legacyBuilderName = `${legacyShellName}-builder`;
+const legacyInlineScriptName = ['inline', '-dist.cjs'].join('');
 
 function readText(relativePath) {
   return fs.readFileSync(path.join(rootDir, relativePath), 'utf8');
 }
 
-test('package scripts keep Electron and add Tauri commands', () => {
-  assert.equal(packageJson.scripts['desktop:start'], 'npm run build && electron .');
-  assert.equal(packageJson.scripts['package:win'], 'node scripts/package-win.cjs');
+test('package scripts expose only the Tauri desktop shell', () => {
+  assert.deepEqual(Object.keys(packageJson.scripts).sort(), [
+    'build',
+    'dev',
+    'package:tauri',
+    'preview',
+    'tauri:build',
+    'tauri:dev',
+  ]);
+  assert.equal(packageJson.scripts.build, 'tsc -p tsconfig.app.json && vite build');
+  assert.equal(packageJson.scripts.dev, 'vite');
+  assert.equal(packageJson.scripts.preview, 'vite preview');
   assert.equal(packageJson.scripts['tauri:dev'], 'tauri dev');
-  assert.equal(packageJson.scripts['tauri:build'], 'tauri build');
+  assert.equal(packageJson.scripts['tauri:build'], 'node scripts/package-tauri.cjs');
   assert.equal(packageJson.scripts['package:tauri'], 'node scripts/package-tauri.cjs');
+  assert.equal('main' in packageJson, false);
+  assert.equal('build' in packageJson && typeof packageJson.build === 'object', false);
+});
+
+test('old desktop shell files and dependencies are removed', () => {
+  assert.equal(fs.existsSync(path.join(rootDir, legacyShellName)), false);
+  assert.equal(fs.existsSync(path.join(rootDir, 'scripts/package-win.cjs')), false);
+  assert.equal(fs.existsSync(path.join(rootDir, 'scripts', legacyInlineScriptName)), false);
+  assert.equal(packageJson.devDependencies[legacyShellName], undefined);
+  assert.equal(packageJson.devDependencies[legacyBuilderName], undefined);
 });
 
 test('Tauri config loads the existing Vite app and builds NSIS by default', () => {
@@ -50,25 +72,40 @@ test('Tauri package script copies the NSIS installer to release', () => {
   const packageScript = readText('scripts/package-tauri.cjs');
 
   assert.match(packageScript, /'build', '--bundles', 'nsis'/);
-  assert.match(packageScript, /Windows-Tauri-安装包\.exe/);
+  assert.match(packageScript, /src-tauri', 'tauri\.conf\.json'/);
+  assert.match(packageScript, /path\.basename\(installer\.filePath\)/);
+  assert.match(packageScript, /fs\.copyFileSync\(installer\.filePath, outputPath\)/);
   assert.match(packageScript, /src-tauri.+bundle.+nsis/s);
 });
 
 test('Tauri development launcher starts the desktop dev shell from the project root', () => {
   const launcher = readText('打开Tauri开发版.bat');
+  const mainLauncher = readText('打开日计划.bat');
+  const miniLauncher = readText('打开当前任务小窗.bat');
 
-  assert.match(launcher, /cd \/d "%~dp0"/);
-  assert.match(launcher, /call npm\.cmd run tauri:dev/);
-  assert.match(launcher, /pause/);
+  for (const launcherSource of [launcher, mainLauncher, miniLauncher]) {
+    assert.match(launcherSource, /cd \/d "%~dp0"/);
+    assert.match(launcherSource, /call npm\.cmd run tauri:dev/);
+    assert.match(launcherSource, /pause/);
+    assert.equal(launcherSource.includes(`node_modules\\${legacyShellName}\\dist`), false);
+  }
 });
 
-test('React uses a shared desktop bridge with Electron and Tauri support', () => {
+test('React uses a Tauri-only desktop bridge', () => {
   const appSource = readText('src/App.tsx');
   const bridgeSource = readText('src/lib/desktopBridge.ts');
 
   assert.match(appSource, /getDesktopBridge/);
   assert.match(bridgeSource, /@tauri-apps\/api\/webviewWindow/);
-  assert.match(bridgeSource, /window\.desktopBridge/);
+  assert.doesNotMatch(bridgeSource, /window\.desktopBridge/);
   assert.match(bridgeSource, /setAlwaysOnTop/);
+  assert.match(bridgeSource, /LogicalSize/);
+  assert.match(bridgeSource, /resizeMiniWindow/);
   assert.match(bridgeSource, /view=mini/);
+});
+
+test('Tauri permissions allow the mini window to resize itself', () => {
+  const capability = JSON.parse(readText('src-tauri/capabilities/default.json'));
+
+  assert.ok(capability.permissions.includes('core:window:allow-set-size'));
 });

@@ -3,37 +3,13 @@
   "private": true,
   "version": "0.1.1",
   "type": "module",
-  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.app.json && vite build && node scripts/inline-dist.cjs",
-    "desktop:dev": "npm run build && electron .",
-    "desktop:start": "npm run build && electron .",
-    "package:win": "node scripts/package-win.cjs",
+    "build": "tsc -p tsconfig.app.json && vite build",
     "preview": "vite preview",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:build": "node scripts/package-tauri.cjs",
     "package:tauri": "node scripts/package-tauri.cjs"
-  },
-  "build": {
-    "appId": "local.time-block-planner",
-    "productName": "半小时日计划",
-    "electronDist": "node_modules/electron/dist",
-    "directories": {
-      "output": "release"
-    },
-    "electronLanguages": [
-      "zh-CN",
-      "en-US"
-    ],
-    "files": [
-      "dist/**/*",
-      "electron/**/*",
-      "package.json"
-    ],
-    "win": {
-      "signAndEditExecutable": false
-    }
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
@@ -45,8 +21,6 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^5.0.0",
-    "electron": "^42.2.0",
-    "electron-builder": "^26.8.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "typescript": "^5.8.0",

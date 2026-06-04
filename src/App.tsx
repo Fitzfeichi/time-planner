@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent,
+} from 'react';
 import { AppUpdatePanel } from './components/AppUpdatePanel';
 import { CurrentTaskCard } from './components/CurrentTaskCard';
 import { DayHeader } from './components/DayHeader';
@@ -19,6 +27,7 @@ import { updateSlotPlanForDate } from './lib/planUpdates';
 import { getTaskBlockNeighbors } from './lib/slotNeighbors';
 import { moveSelectedSlotPlans } from './lib/slotMoves';
 import { getDesktopBridge } from './lib/desktopBridge';
+import { getTaskProgressPercent } from './lib/taskProgress';
 import { createEmptyDayPlan, createTimeSlots, getCurrentSlotId } from './lib/timeSlots';
 import type {
   DayPlan,
@@ -31,8 +40,17 @@ import type {
 } from './types';
 
 const STORAGE_KEY = 'time-manager-app-state';
+const WORKSPACE_LAYOUT_STORAGE_KEY = 'time-manager-workspace-layout';
 const STORAGE_VERSION = 3;
 const EXPECTED_SLOT_COUNT = 48;
+const MINI_WINDOW_WIDTH = 260;
+const MINI_WINDOW_RESIZE_THRESHOLD = 2;
+const DEFAULT_SIDE_PANEL_WIDTH = 360;
+const MIN_SIDE_PANEL_WIDTH = 300;
+const MAX_SIDE_PANEL_WIDTH = 560;
+const MIN_TIME_TABLE_WIDTH = 520;
+const WORKSPACE_DIVIDER_WIDTH = 10;
+const WORKSPACE_RESIZE_KEYBOARD_STEP = 24;
 const SLOT_STATUSES: SlotStatus[] = ['empty', 'planned', 'done', 'changed'];
 
 interface LegacyPersistedAppState {
@@ -276,6 +294,59 @@ function saveState(state: PersistedAppState) {
   }
 }
 
+function getMaxSidePanelWidth(workspaceWidth: number) {
+  return Math.max(
+    MIN_SIDE_PANEL_WIDTH,
+    Math.min(MAX_SIDE_PANEL_WIDTH, workspaceWidth - MIN_TIME_TABLE_WIDTH - WORKSPACE_DIVIDER_WIDTH),
+  );
+}
+
+function clampSidePanelWidth(width: number, workspaceWidth: number) {
+  return Math.min(getMaxSidePanelWidth(workspaceWidth), Math.max(MIN_SIDE_PANEL_WIDTH, width));
+}
+
+function readSavedSidePanelWidth() {
+  if (typeof window === 'undefined') {
+    return DEFAULT_SIDE_PANEL_WIDTH;
+  }
+
+  try {
+    const savedValue = window.localStorage.getItem(WORKSPACE_LAYOUT_STORAGE_KEY);
+
+    if (savedValue === null) {
+      return DEFAULT_SIDE_PANEL_WIDTH;
+    }
+
+    const parsedValue: unknown = JSON.parse(savedValue);
+
+    if (
+      isRecord(parsedValue) &&
+      typeof parsedValue.sidePanelWidth === 'number' &&
+      Number.isFinite(parsedValue.sidePanelWidth)
+    ) {
+      return Math.min(
+        MAX_SIDE_PANEL_WIDTH,
+        Math.max(MIN_SIDE_PANEL_WIDTH, parsedValue.sidePanelWidth),
+      );
+    }
+  } catch {
+    // Layout preferences are optional; invalid saved values should not block the planner.
+  }
+
+  return DEFAULT_SIDE_PANEL_WIDTH;
+}
+
+function saveSidePanelWidth(sidePanelWidth: number) {
+  try {
+    window.localStorage.setItem(
+      WORKSPACE_LAYOUT_STORAGE_KEY,
+      JSON.stringify({ sidePanelWidth }),
+    );
+  } catch {
+    // localStorage may be unavailable or full; the default width remains usable.
+  }
+}
+
 function getPlanForDate(plansByDate: PlansByDate, dateKey: string) {
   return normalizeDayPlan(plansByDate[dateKey] ?? createEmptyDayPlan());
 }
@@ -375,6 +446,11 @@ export function App() {
     () => !isMiniView && isNightFoldSlot(initialSelectedSlotId),
   );
   const hasAutoScrolledToCurrentSlot = useRef(false);
+  const miniShellRef = useRef<HTMLElement | null>(null);
+  const lastMiniWindowHeight = useRef(0);
+  const workspaceRef = useRef<HTMLElement | null>(null);
+  const [sidePanelWidth, setSidePanelWidth] = useState(readSavedSidePanelWidth);
+  const [isWorkspaceResizing, setIsWorkspaceResizing] = useState(false);
 
   const currentDateKey = getDateKey(currentDate);
   const todayDateKey = getDateKey(now);
@@ -413,10 +489,10 @@ export function App() {
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       setNow(new Date());
-    }, 30000);
+    }, isMiniView ? 1000 : 30000);
 
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [isMiniView]);
 
   useEffect(() => {
     if (!isMiniView) {
@@ -429,6 +505,57 @@ export function App() {
       document.body.classList.remove('mini-mode');
     };
   }, [isMiniView]);
+
+  useEffect(() => {
+    if (!isMiniView || miniShellRef.current === null) {
+      return;
+    }
+
+    const miniShell = miniShellRef.current;
+    let resizeFrameId: number | null = null;
+
+    function resizeMiniWindow() {
+      if (resizeFrameId !== null) {
+        window.cancelAnimationFrame(resizeFrameId);
+      }
+
+      resizeFrameId = window.requestAnimationFrame(() => {
+        const nextHeight = Math.ceil(miniShell.scrollHeight);
+
+        if (
+          Math.abs(nextHeight - lastMiniWindowHeight.current) < MINI_WINDOW_RESIZE_THRESHOLD
+        ) {
+          return;
+        }
+
+        lastMiniWindowHeight.current = nextHeight;
+
+        if (desktopBridge) {
+          void desktopBridge.resizeMiniWindow(nextHeight);
+          return;
+        }
+
+        try {
+          window.resizeTo(MINI_WINDOW_WIDTH, nextHeight);
+        } catch {
+          // Some browsers block popup resizing; Tauri uses the desktop bridge above.
+        }
+      });
+    }
+
+    resizeMiniWindow();
+
+    const resizeObserver = new ResizeObserver(resizeMiniWindow);
+    resizeObserver.observe(miniShell);
+
+    return () => {
+      resizeObserver.disconnect();
+
+      if (resizeFrameId !== null) {
+        window.cancelAnimationFrame(resizeFrameId);
+      }
+    };
+  }, [desktopBridge, isMiniView]);
 
   useEffect(() => {
     if (isNightFoldExpanded || !isNightFoldSlot(selectedSlotId)) {
@@ -483,6 +610,22 @@ export function App() {
       showMiniNeighborTasks,
     });
   }, [currentDateKey, plansByDate, selectedSlotId, showMiniNeighborTasks]);
+
+  useEffect(() => {
+    saveSidePanelWidth(sidePanelWidth);
+  }, [sidePanelWidth]);
+
+  useEffect(() => {
+    if (!isWorkspaceResizing) {
+      return;
+    }
+
+    document.body.classList.add('workspace-resizing');
+
+    return () => {
+      document.body.classList.remove('workspace-resizing');
+    };
+  }, [isWorkspaceResizing]);
 
   useEffect(() => {
     function handleStorage(event: StorageEvent) {
@@ -716,6 +859,82 @@ export function App() {
     });
   }
 
+  function getWorkspaceWidth() {
+    return workspaceRef.current?.getBoundingClientRect().width ?? 1440;
+  }
+
+  function updateSidePanelWidthFromPointer(clientX: number) {
+    const workspaceElement = workspaceRef.current;
+
+    if (workspaceElement === null) {
+      return;
+    }
+
+    const workspaceRect = workspaceElement.getBoundingClientRect();
+    const nextWidth = workspaceRect.right - clientX;
+
+    setSidePanelWidth(clampSidePanelWidth(nextWidth, workspaceRect.width));
+  }
+
+  function startWorkspaceResize(event: PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsWorkspaceResizing(true);
+    updateSidePanelWidthFromPointer(event.clientX);
+  }
+
+  function resizeWorkspace(event: PointerEvent<HTMLButtonElement>) {
+    if (!isWorkspaceResizing) {
+      return;
+    }
+
+    event.preventDefault();
+    updateSidePanelWidthFromPointer(event.clientX);
+  }
+
+  function stopWorkspaceResize(event: PointerEvent<HTMLButtonElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    setIsWorkspaceResizing(false);
+  }
+
+  function nudgeSidePanelWidth(delta: number) {
+    setSidePanelWidth((previous) =>
+      clampSidePanelWidth(previous + delta, getWorkspaceWidth()),
+    );
+  }
+
+  function handleWorkspaceDividerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      nudgeSidePanelWidth(WORKSPACE_RESIZE_KEYBOARD_STEP);
+      return;
+    }
+
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      nudgeSidePanelWidth(-WORKSPACE_RESIZE_KEYBOARD_STEP);
+      return;
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault();
+      setSidePanelWidth(MIN_SIDE_PANEL_WIDTH);
+      return;
+    }
+
+    if (event.key === 'End') {
+      event.preventDefault();
+      setSidePanelWidth(getMaxSidePanelWidth(getWorkspaceWidth()));
+    }
+  }
+
   async function openMiniWindow() {
     if (desktopBridge) {
       await desktopBridge.openMiniWindow();
@@ -728,7 +947,7 @@ export function App() {
     window.open(
       miniUrl.toString(),
       'time-manager-current-task',
-      'popup=yes,width=260,height=230,left=980,top=80',
+      `popup=yes,width=${MINI_WINDOW_WIDTH},height=230,left=980,top=80`,
     );
   }
 
@@ -771,11 +990,17 @@ export function App() {
     await desktopBridge?.closeMiniWindow();
   }
 
+  const workspaceStyle = {
+    '--side-panel-width': `${sidePanelWidth}px`,
+  } as CSSProperties;
+
   if (isMiniView) {
     const canSetMiniAlwaysOnTop = Boolean(desktopBridge?.setMiniAlwaysOnTop);
+    const currentTaskProgressPercent =
+      currentSlot === null ? 0 : getTaskProgressPercent(currentSlot, now);
 
     return (
-      <main className="mini-shell">
+      <main className="mini-shell" ref={miniShellRef}>
         <div className="mini-titlebar">
           <button
             type="button"
@@ -832,6 +1057,19 @@ export function App() {
             </button>
           </div>
         </div>
+        <div
+          className="mini-task-progress"
+          role="progressbar"
+          aria-label="当前任务进度"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(currentTaskProgressPercent)}
+        >
+          <div
+            className="mini-task-progress-fill"
+            style={{ width: `${currentTaskProgressPercent}%` }}
+          />
+        </div>
         <CurrentTaskCard
           slot={currentSlot}
           previousSlot={currentSlotNeighbors.previous}
@@ -855,7 +1093,11 @@ export function App() {
         onToday={goToday}
       />
 
-      <section className="workspace">
+      <section
+        className={`workspace${isWorkspaceResizing ? ' is-resizing' : ''}`}
+        ref={workspaceRef}
+        style={workspaceStyle}
+      >
         <TimeTable
           slots={slots}
           daySlots={dayPlan.slots}
@@ -868,6 +1110,23 @@ export function App() {
           onEditSlotPlan={editSlotPlan}
           onMoveSelectedPlans={moveSelectedPlans}
           onExpandNightFold={() => setIsNightFoldManuallyExpanded(true)}
+        />
+
+        <button
+          type="button"
+          className="workspace-divider"
+          role="separator"
+          aria-label="调整时间表和规划栏宽度"
+          aria-orientation="vertical"
+          aria-valuemin={MIN_SIDE_PANEL_WIDTH}
+          aria-valuemax={MAX_SIDE_PANEL_WIDTH}
+          aria-valuenow={Math.round(sidePanelWidth)}
+          onPointerDown={startWorkspaceResize}
+          onPointerMove={resizeWorkspace}
+          onPointerUp={stopWorkspaceResize}
+          onPointerCancel={stopWorkspaceResize}
+          onLostPointerCapture={() => setIsWorkspaceResizing(false)}
+          onKeyDown={handleWorkspaceDividerKeyDown}
         />
 
         <aside className="side-panel">

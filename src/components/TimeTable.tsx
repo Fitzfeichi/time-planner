@@ -342,7 +342,7 @@ export function TimeTable({
               >
                 <span className="slot-time">00:30 - 08:00</span>
                 <span className="slot-text">夜间时间已折叠</span>
-                <span className="slot-text">已隐藏 15 个时间格，点击展开</span>
+                <span className="slot-text">点击展开</span>
                 <span className="status-pill">夜间</span>
               </button>
             );

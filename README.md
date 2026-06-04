@@ -11,7 +11,8 @@
 - 右侧显示当前任务卡片，方便快速看到现在该做什么。
 - 支持打开当前任务小窗，小窗可以置顶、最小化和关闭。
 - 支持今日复盘输入，适合每天结束后回顾。
-- 数据保存在本机 Electron / 浏览器环境的 localStorage 中，不上传云端。
+- 支持 Tauri 安装版自动检查更新。
+- 数据保存在本机 Tauri / 浏览器开发环境的 localStorage 中，不上传云端。
 
 ## 使用方式
 
@@ -21,11 +22,13 @@
 npm.cmd install
 ```
 
-启动桌面版：
+启动 Tauri 桌面开发版：
 
 ```powershell
-npm.cmd run desktop:start
+npm.cmd run tauri:dev
 ```
+
+也可以双击项目里的 `打开日计划.bat` 启动 Tauri 开发版。`打开当前任务小窗.bat` 不再启动旧桌面壳，它会打开 Tauri 主窗口；进入软件后点击当前任务卡片里的小窗按钮打开小窗。
 
 如果只想构建前端页面：
 
@@ -33,36 +36,34 @@ npm.cmd run desktop:start
 npm.cmd run build
 ```
 
-构建后也可以直接打开 `dist\index.html`。项目里的 `打开日计划.bat` 和 `打开当前任务小窗.bat` 是 Windows 本地快捷启动脚本。
-
 ## 打包
 
-生成 Windows 免安装包和便携版 exe：
+生成 Tauri Windows 安装包、签名和自动更新清单：
 
 ```powershell
-npm.cmd run package:win
+npm.cmd run tauri:build
 ```
 
-打包产物会输出到 `release` 目录。这个目录属于本地构建产物，不提交到 GitHub。
-
-生成 Tauri Windows 安装包和自动更新清单：
+`package:tauri` 是同一条发布打包路径的别名：
 
 ```powershell
 npm.cmd run package:tauri
 ```
 
+打包产物会输出到 `src-tauri\target\release\bundle` 和 `release` 目录。`release` 属于本地构建产物，不提交到 GitHub。
+
 Tauri 自动更新使用 GitHub Releases。发布步骤见 `docs/tauri-auto-update.md`。
 
 ## 数据说明
 
-当前版本不做账号登录、云同步或多设备同步。计划和复盘数据保存在当前电脑的 Electron / 浏览器本地存储中；如果清理应用数据、浏览器数据或更换运行环境，记录可能会丢失。
+当前版本不做账号登录、云同步或多设备同步。计划和复盘数据保存在当前电脑的 Tauri / 浏览器开发环境本地存储中；如果清理应用数据、浏览器数据或更换运行环境，记录可能会丢失。
 
 ## 技术栈
 
 - React
 - TypeScript
 - Vite
-- Electron
+- Tauri
 
 ## 项目状态
 

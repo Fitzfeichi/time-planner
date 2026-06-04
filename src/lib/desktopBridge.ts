@@ -1,13 +1,18 @@
-import { getCurrentWindow, Window } from '@tauri-apps/api/window';
+import { getCurrentWindow, LogicalSize, Window } from '@tauri-apps/api/window';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 
 const MAIN_WINDOW_LABEL = 'main';
 const MINI_WINDOW_LABEL = 'mini';
+const MINI_WINDOW_WIDTH = 260;
+const MINI_WINDOW_INITIAL_HEIGHT = 230;
+const MINI_WINDOW_MIN_HEIGHT = 220;
+const MINI_WINDOW_MAX_HEIGHT = 640;
 
 export interface DesktopBridge {
   openMiniWindow: () => Promise<void>;
   openMainWindow: () => Promise<void>;
   setMiniAlwaysOnTop: (shouldAlwaysOnTop: boolean) => Promise<boolean>;
+  resizeMiniWindow: (height: number) => Promise<void>;
   minimizeMiniWindow: () => Promise<void>;
   closeMiniWindow: () => Promise<void>;
 }
@@ -34,11 +39,11 @@ const tauriDesktopBridge: DesktopBridge = {
     const miniWindow = new WebviewWindow(MINI_WINDOW_LABEL, {
       url: '/?view=mini',
       title: '当前任务',
-      width: 260,
-      height: 230,
-      minWidth: 260,
-      minHeight: 220,
-      maxHeight: 360,
+      width: MINI_WINDOW_WIDTH,
+      height: MINI_WINDOW_INITIAL_HEIGHT,
+      minWidth: MINI_WINDOW_WIDTH,
+      minHeight: MINI_WINDOW_MIN_HEIGHT,
+      maxHeight: MINI_WINDOW_MAX_HEIGHT,
       decorations: false,
       resizable: true,
       backgroundColor: '#f5f5f7',
@@ -77,6 +82,15 @@ const tauriDesktopBridge: DesktopBridge = {
     return shouldAlwaysOnTop;
   },
 
+  async resizeMiniWindow(height) {
+    const nextHeight = Math.min(
+      MINI_WINDOW_MAX_HEIGHT,
+      Math.max(MINI_WINDOW_MIN_HEIGHT, Math.ceil(height)),
+    );
+
+    await getCurrentWindow().setSize(new LogicalSize(MINI_WINDOW_WIDTH, nextHeight));
+  },
+
   async minimizeMiniWindow() {
     await getCurrentWindow().minimize();
   },
@@ -89,10 +103,6 @@ const tauriDesktopBridge: DesktopBridge = {
 export function getDesktopBridge(): DesktopBridge | undefined {
   if (typeof window === 'undefined') {
     return undefined;
-  }
-
-  if (window.desktopBridge) {
-    return window.desktopBridge;
   }
 
   if (isTauriRuntime()) {

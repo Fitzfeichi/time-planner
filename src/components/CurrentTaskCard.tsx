@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 import { statusLabels } from '../lib/status';
 import type { TimeSlot } from '../types';
 
@@ -19,6 +20,7 @@ const timeFormatter = new Intl.DateTimeFormat('zh-CN', {
   hour: '2-digit',
   minute: '2-digit',
 });
+const MINI_PLAN_INPUT_MAX_HEIGHT = 360;
 
 interface MiniTaskPreviewProps {
   label: string;
@@ -64,8 +66,22 @@ export function CurrentTaskCard({
   onPlanChange,
   onToggleMiniNeighborTasks,
 }: CurrentTaskCardProps) {
+  const miniPlanInputRef = useRef<HTMLTextAreaElement | null>(null);
   const hasPlan = Boolean(slot?.plan.trim());
   const hasActual = Boolean(slot?.actual.trim());
+
+  useLayoutEffect(() => {
+    if (!compact || miniPlanInputRef.current === null) {
+      return;
+    }
+
+    const planInput = miniPlanInputRef.current;
+    planInput.style.height = '0px';
+    const nextHeight = Math.min(planInput.scrollHeight, MINI_PLAN_INPUT_MAX_HEIGHT);
+    planInput.style.height = `${nextHeight}px`;
+    planInput.style.overflowY =
+      planInput.scrollHeight > MINI_PLAN_INPUT_MAX_HEIGHT ? 'auto' : 'hidden';
+  }, [compact, showMiniNeighborTasks, slot?.plan]);
 
   if (compact) {
     return (
@@ -91,6 +107,7 @@ export function CurrentTaskCard({
                   {slot.start} - {slot.end}
                 </span>
                 <textarea
+                  ref={miniPlanInputRef}
                   className="mini-task-plan-input"
                   value={slot.plan}
                   onChange={(event) => onPlanChange?.(event.target.value)}
