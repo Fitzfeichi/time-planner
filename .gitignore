@@ -26,6 +26,7 @@ pnpm-debug.log*
 # Local agent/design notes
 AGENTS.md
 DESIGN.md
+.codex-tmp/
 
 # Editor and OS files
 .vscode/
