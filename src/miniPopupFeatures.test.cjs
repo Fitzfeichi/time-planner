@@ -9,3 +9,10 @@ test('browser mini popup uses the compact mini window size', () => {
   assert.match(appSource, /MINI_WINDOW_WIDTH = 260/);
   assert.match(appSource, /popup=yes,width=\$\{MINI_WINDOW_WIDTH\},height=230/);
 });
+
+test('mini view exposes a sticky note button and separate note route', () => {
+  assert.match(appSource, /STICKY_NOTE_STORAGE_KEY = 'time-manager-sticky-note-content'/);
+  assert.match(appSource, /view === 'sticky-note'/);
+  assert.match(appSource, /mini-sticky-note-button/);
+  assert.match(appSource, /toggleStickyNoteWindow/);
+});

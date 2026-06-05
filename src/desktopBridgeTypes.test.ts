@@ -17,6 +17,16 @@ function assertDesktopBridgeSupportsMiniResize(bridge: DesktopBridge) {
   return result;
 }
 
+function assertDesktopBridgeSupportsStickyNote(bridge: DesktopBridge) {
+  if (bridge.toggleStickyNoteWindow) {
+    const result: Promise<boolean> = bridge.toggleStickyNoteWindow(true);
+    return result;
+  }
+
+  return undefined;
+}
+
 void assertDesktopBridgeSupportsMiniPin;
 void assertDesktopBridgeSupportsMiniControls;
 void assertDesktopBridgeSupportsMiniResize;
+void assertDesktopBridgeSupportsStickyNote;

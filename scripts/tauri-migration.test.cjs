@@ -100,12 +100,24 @@ test('React uses a Tauri-only desktop bridge', () => {
   assert.doesNotMatch(bridgeSource, /window\.desktopBridge/);
   assert.match(bridgeSource, /setAlwaysOnTop/);
   assert.match(bridgeSource, /LogicalSize/);
+  assert.match(bridgeSource, /LogicalPosition/);
   assert.match(bridgeSource, /resizeMiniWindow/);
+  assert.match(bridgeSource, /toggleStickyNoteWindow/);
   assert.match(bridgeSource, /view=mini/);
+  assert.match(bridgeSource, /view=sticky-note/);
 });
 
 test('Tauri permissions allow the mini window to resize itself', () => {
   const capability = JSON.parse(readText('src-tauri/capabilities/default.json'));
 
   assert.ok(capability.permissions.includes('core:window:allow-set-size'));
+});
+
+test('Tauri permissions allow the sticky note window to attach beside the mini window', () => {
+  const capability = JSON.parse(readText('src-tauri/capabilities/default.json'));
+
+  assert.ok(capability.windows.includes('sticky-note'));
+  assert.ok(capability.permissions.includes('core:window:allow-outer-position'));
+  assert.ok(capability.permissions.includes('core:window:allow-outer-size'));
+  assert.ok(capability.permissions.includes('core:window:allow-set-position'));
 });

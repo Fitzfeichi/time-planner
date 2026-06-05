@@ -41,6 +41,7 @@ import type {
 
 const STORAGE_KEY = 'time-manager-app-state';
 const WORKSPACE_LAYOUT_STORAGE_KEY = 'time-manager-workspace-layout';
+const STICKY_NOTE_STORAGE_KEY = 'time-manager-sticky-note-content';
 const STORAGE_VERSION = 3;
 const EXPECTED_SLOT_COUNT = 48;
 const MINI_WINDOW_WIDTH = 260;
@@ -52,6 +53,7 @@ const MIN_TIME_TABLE_WIDTH = 520;
 const WORKSPACE_DIVIDER_WIDTH = 10;
 const WORKSPACE_RESIZE_KEYBOARD_STEP = 24;
 const SLOT_STATUSES: SlotStatus[] = ['empty', 'planned', 'done', 'changed'];
+type AppView = 'main' | 'mini' | 'sticky-note';
 
 interface LegacyPersistedAppState {
   version: number;
@@ -347,6 +349,40 @@ function saveSidePanelWidth(sidePanelWidth: number) {
   }
 }
 
+function getInitialAppView(): AppView {
+  if (typeof window === 'undefined') {
+    return 'main';
+  }
+
+  const view = new URLSearchParams(window.location.search).get('view');
+
+  if (view === 'mini' || view === 'sticky-note') {
+    return view;
+  }
+
+  return 'main';
+}
+
+function readStickyNoteContent() {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  try {
+    return window.localStorage.getItem(STICKY_NOTE_STORAGE_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function saveStickyNoteContent(content: string) {
+  try {
+    window.localStorage.setItem(STICKY_NOTE_STORAGE_KEY, content);
+  } catch {
+    // The sticky note should remain editable even if localStorage is unavailable.
+  }
+}
+
 function getPlanForDate(plansByDate: PlansByDate, dateKey: string) {
   return normalizeDayPlan(plansByDate[dateKey] ?? createEmptyDayPlan());
 }
@@ -401,17 +437,45 @@ function getSlotWithRangeTime(
   };
 }
 
+function StickyNoteView() {
+  const [content, setContent] = useState(readStickyNoteContent);
+
+  useEffect(() => {
+    document.body.classList.add('sticky-note-mode');
+
+    return () => {
+      document.body.classList.remove('sticky-note-mode');
+    };
+  }, []);
+
+  useEffect(() => {
+    saveStickyNoteContent(content);
+  }, [content]);
+
+  return (
+    <main className="sticky-note-shell">
+      <textarea
+        className="sticky-note-input"
+        value={content}
+        onChange={(event) => setContent(event.target.value)}
+        placeholder="在这里记录临时想法"
+        aria-label="便利贴内容"
+      />
+    </main>
+  );
+}
+
 export function App() {
+  const initialView = getInitialAppView();
+
+  if (initialView === 'sticky-note') {
+    return <StickyNoteView />;
+  }
+
+  const isMiniView = initialView === 'mini';
   const slots = useMemo(() => createTimeSlots(), []);
   const savedState = useMemo(() => loadSavedState(), []);
   const initialNow = useMemo(() => new Date(), []);
-  const isMiniView = useMemo(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-
-    return new URLSearchParams(window.location.search).get('view') === 'mini';
-  }, []);
   const initialDate = useMemo(() => {
     if (!isMiniView) {
       return initialNow;
@@ -442,6 +506,7 @@ export function App() {
     readMiniNeighborPreference(savedState ?? {}),
   );
   const [isMiniAlwaysOnTop, setIsMiniAlwaysOnTop] = useState(false);
+  const [isStickyNoteOpen, setIsStickyNoteOpen] = useState(false);
   const [isNightFoldManuallyExpanded, setIsNightFoldManuallyExpanded] = useState(
     () => !isMiniView && isNightFoldSlot(initialSelectedSlotId),
   );
@@ -982,6 +1047,15 @@ export function App() {
     setIsMiniAlwaysOnTop(appliedAlwaysOnTop);
   }
 
+  async function toggleStickyNoteWindow() {
+    if (!desktopBridge?.toggleStickyNoteWindow) {
+      return;
+    }
+
+    const nextIsStickyNoteOpen = await desktopBridge.toggleStickyNoteWindow(isMiniAlwaysOnTop);
+    setIsStickyNoteOpen(nextIsStickyNoteOpen);
+  }
+
   async function minimizeMiniWindow() {
     await desktopBridge?.minimizeMiniWindow();
   }
@@ -996,6 +1070,7 @@ export function App() {
 
   if (isMiniView) {
     const canSetMiniAlwaysOnTop = Boolean(desktopBridge?.setMiniAlwaysOnTop);
+    const canToggleStickyNote = Boolean(desktopBridge?.toggleStickyNoteWindow);
     const currentTaskProgressPercent =
       currentSlot === null ? 0 : getTaskProgressPercent(currentSlot, now);
 
@@ -1012,6 +1087,20 @@ export function App() {
             <span className="mini-back-icon" aria-hidden="true" />
           </button>
           <div className="mini-title-actions">
+            {canToggleStickyNote ? (
+              <button
+                type="button"
+                className={`mini-title-button mini-sticky-note-button${
+                  isStickyNoteOpen ? ' active' : ''
+                }`}
+                aria-label={isStickyNoteOpen ? '关闭便利贴' : '打开便利贴'}
+                aria-pressed={isStickyNoteOpen}
+                title={isStickyNoteOpen ? '关闭便利贴' : '打开便利贴'}
+                onClick={toggleStickyNoteWindow}
+              >
+                <img src="/minimal_sticky_note_icon.svg" alt="" aria-hidden="true" />
+              </button>
+            ) : null}
             {canSetMiniAlwaysOnTop ? (
               <button
                 type="button"

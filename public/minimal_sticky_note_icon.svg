@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Minimal sticky note icon">
+  <title>Minimal Sticky Note Icon</title>
+  <g fill="none" stroke="#000000" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Main note outline with folded corner -->
+    <path d="M245 205
+             H779
+             Q819 205 819 245
+             V642
+             L641 820
+             H245
+             Q205 820 205 780
+             V245
+             Q205 205 245 205 Z"/>
+    <!-- Fold detail -->
+    <path d="M819 642
+             H675
+             Q641 642 641 676
+             V820"/>
+    <path d="M819 642 L641 820"/>
+  </g>
+</svg>
