@@ -52,7 +52,7 @@ npm.cmd run package:tauri
 
 打包产物会输出到 `src-tauri\target\release\bundle` 和 `release` 目录。`release` 属于本地构建产物，不提交到 GitHub。
 
-Tauri 自动更新使用 GitHub Releases。发布步骤见 `docs/tauri-auto-update.md`。
+Tauri 自动更新优先使用阿里云 OSS 更新源，GitHub Releases 作为备用源。发布步骤见 `docs/tauri-auto-update.md`。
 
 ## 数据说明
 
