@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readMiniNeighborPreference } from './miniNeighborPreference.js';
+import { readMiniNeighborPreference } from './miniNeighborPreference.ts';
 
 test('defaults mini neighbor tasks to hidden for old saved state', () => {
   assert.equal(readMiniNeighborPreference({}), false);

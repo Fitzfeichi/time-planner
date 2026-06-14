@@ -17,10 +17,16 @@ export interface MergedTimeRange {
   endSlotId: string;
 }
 
+export interface NightFoldRange {
+  startSlotId: string;
+  endSlotId: string;
+}
+
 export interface DayPlan {
   slots: TimeSlot[];
   review: string;
   mergedRanges?: MergedTimeRange[];
+  nightFoldRange?: NightFoldRange;
 }
 
 export type PlansByDate = Record<string, DayPlan>;

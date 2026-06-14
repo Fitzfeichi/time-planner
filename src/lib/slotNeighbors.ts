@@ -1,4 +1,4 @@
-import { getMergedRangeForSlot, getMergedRangeSlotIds } from './mergedRanges.js';
+import { getMergedRangeForSlot, getMergedRangeSlotIds } from './mergedRanges.ts';
 import type { MergedTimeRange, TimeSlot } from '../types';
 
 interface SlotNeighbors {

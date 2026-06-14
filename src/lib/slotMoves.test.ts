@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { moveSelectedSlotPlans } from './slotMoves.js';
-import { createTimeSlots } from './timeSlots.js';
-import type { MergedTimeRange, SlotStatus, TimeSlot } from '../types.js';
+import { moveSelectedSlotPlans } from './slotMoves.ts';
+import { createTimeSlots } from './timeSlots.ts';
+import type { MergedTimeRange, SlotStatus, TimeSlot } from '../types.ts';
 
 function createSlotsWithPayloads() {
   return createTimeSlots().map((slot, index): TimeSlot => ({

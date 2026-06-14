@@ -22,7 +22,14 @@ import {
   removeMergedRangeForSlot,
   splitOneSlotFromMergedRangeEnd,
 } from './lib/mergedRanges';
-import { isNightFoldSlot, shouldExpandNightFoldForSlots } from './lib/nightFold';
+import {
+  DEFAULT_NIGHT_FOLD_RANGE,
+  expandNightFoldRangeForAdjacentSlot,
+  isDefaultNightFoldRange,
+  isNightFoldSlot,
+  isSlotInNightFoldRange,
+  shouldExpandNightFoldForSlots,
+} from './lib/nightFold';
 import { readMiniNeighborPreference } from './lib/miniNeighborPreference';
 import { updateSlotPlanForDate } from './lib/planUpdates';
 import { getTaskBlockNeighbors } from './lib/slotNeighbors';
@@ -33,6 +40,7 @@ import { createEmptyDayPlan, createTimeSlots, getCurrentSlotId } from './lib/tim
 import type {
   DayPlan,
   MergedTimeRange,
+  NightFoldRange,
   PersistedAppState,
   PlansByDate,
   SlotSelectionMode,
@@ -55,6 +63,12 @@ const WORKSPACE_DIVIDER_WIDTH = 10;
 const WORKSPACE_RESIZE_KEYBOARD_STEP = 24;
 const SLOT_STATUSES: SlotStatus[] = ['empty', 'planned', 'done', 'changed'];
 type AppView = 'main' | 'mini' | 'sticky-note';
+type EditableSlotField = 'plan' | 'actual';
+
+interface SlotEditorFocusRequest {
+  field: EditableSlotField;
+  requestId: number;
+}
 
 interface LegacyPersistedAppState {
   version: number;
@@ -146,6 +160,14 @@ function isValidMergedTimeRange(value: unknown): value is MergedTimeRange {
   );
 }
 
+function isValidNightFoldRange(value: unknown): value is NightFoldRange {
+  return (
+    isRecord(value) &&
+    isValidSlotId(value.startSlotId) &&
+    isValidSlotId(value.endSlotId)
+  );
+}
+
 function isValidDayPlan(value: unknown): value is DayPlan {
   return (
     isRecord(value) &&
@@ -154,7 +176,8 @@ function isValidDayPlan(value: unknown): value is DayPlan {
     value.slots.length === EXPECTED_SLOT_COUNT &&
     value.slots.every(isValidTimeSlot) &&
     (value.mergedRanges === undefined ||
-      (Array.isArray(value.mergedRanges) && value.mergedRanges.every(isValidMergedTimeRange)))
+      (Array.isArray(value.mergedRanges) && value.mergedRanges.every(isValidMergedTimeRange))) &&
+    (value.nightFoldRange === undefined || isValidNightFoldRange(value.nightFoldRange))
   );
 }
 
@@ -501,7 +524,8 @@ export function App() {
   const [selectionAnchorSlotId, setSelectionAnchorSlotId] = useState<string>(
     () => initialSelectedSlotId,
   );
-  const [planFocusRequestId, setPlanFocusRequestId] = useState(0);
+  const [slotEditorFocusRequest, setSlotEditorFocusRequest] =
+    useState<SlotEditorFocusRequest | null>(null);
   const [now, setNow] = useState(() => initialNow);
   const [showMiniNeighborTasks, setShowMiniNeighborTasks] = useState(() =>
     readMiniNeighborPreference(savedState ?? {}),
@@ -542,10 +566,14 @@ export function App() {
     currentSlotId,
   );
   const currentSlot = currentSlotNeighbors.current;
-  const currentVisibleSlotId = currentMergedRange?.startSlotId ?? currentSlotId;
   const isViewingToday = currentDateKey === todayDateKey;
+  const nightFoldRange = dayPlan.nightFoldRange ?? DEFAULT_NIGHT_FOLD_RANGE;
   const isNightFoldExpanded =
     isNightFoldManuallyExpanded || shouldExpandNightFoldForSlots(dayPlan.slots);
+  const currentVisibleSlotId =
+    !isNightFoldExpanded && isViewingToday && isSlotInNightFoldRange(currentSlotId, nightFoldRange)
+      ? nightFoldRange.startSlotId
+      : currentMergedRange?.startSlotId ?? currentSlotId;
   const canMergeSelectedSlots = canCreateMergedRange(
     dayPlan.slots,
     dayPlan.mergedRanges,
@@ -624,15 +652,18 @@ export function App() {
   }, [desktopBridge, isMiniView]);
 
   useEffect(() => {
-    if (isNightFoldExpanded || !isNightFoldSlot(selectedSlotId)) {
+    if (isNightFoldExpanded || !isSlotInNightFoldRange(selectedSlotId, nightFoldRange)) {
       return;
     }
 
-    const firstVisibleWorkSlotId = slots[16].id;
-    setSelectedSlotId(firstVisibleWorkSlotId);
-    setSelectedSlotIds([firstVisibleWorkSlotId]);
-    setSelectionAnchorSlotId(firstVisibleWorkSlotId);
-  }, [isNightFoldExpanded, selectedSlotId, slots]);
+    const rangeStartIndex = slots.findIndex((slot) => slot.id === nightFoldRange.startSlotId);
+    const rangeEndIndex = slots.findIndex((slot) => slot.id === nightFoldRange.endSlotId);
+    const nextVisibleSlot = slots[rangeEndIndex + 1] ?? slots[rangeStartIndex - 1] ?? slots[0];
+
+    setSelectedSlotId(nextVisibleSlot.id);
+    setSelectedSlotIds([nextVisibleSlot.id]);
+    setSelectionAnchorSlotId(nextVisibleSlot.id);
+  }, [isNightFoldExpanded, nightFoldRange, selectedSlotId, slots]);
 
   useEffect(() => {
     if (isMiniView || hasAutoScrolledToCurrentSlot.current) {
@@ -816,9 +847,12 @@ export function App() {
     setSelectionAnchorSlotId(nextFocusedSlotId);
   }
 
-  function editSlotPlan(slotId: string) {
+  function focusSlotEditorField(slotId: string, field: EditableSlotField) {
     selectSlot(slotId, 'replace');
-    setPlanFocusRequestId((previous) => previous + 1);
+    setSlotEditorFocusRequest((previous) => ({
+      field,
+      requestId: (previous?.requestId ?? 0) + 1,
+    }));
   }
 
   function moveSelectedPlans(dragStartSlotId: string, insertIndex: number) {
@@ -844,6 +878,34 @@ export function App() {
     setSelectedSlotId(moveResult.movedSlotIds[0]);
     setSelectedSlotIds(moveResult.movedSlotIds);
     setSelectionAnchorSlotId(moveResult.movedSlotIds[0]);
+  }
+
+  function foldSlotIntoNight(slotId: string) {
+    const nextRange = expandNightFoldRangeForAdjacentSlot(nightFoldRange, slotId);
+
+    if (nextRange === null) {
+      return;
+    }
+
+    updatePlanForCurrentDate((previous) => ({
+      ...previous,
+      nightFoldRange: isDefaultNightFoldRange(nextRange) ? undefined : nextRange,
+    }));
+    setIsNightFoldManuallyExpanded(false);
+  }
+
+  function resetNightFoldRange() {
+    updatePlanForCurrentDate((previous) => {
+      if (previous.nightFoldRange === undefined) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        nightFoldRange: undefined,
+      };
+    });
+    setIsNightFoldManuallyExpanded(false);
   }
 
   function mergeSelectedSlots() {
@@ -1230,9 +1292,12 @@ export function App() {
           selectedSlotIds={selectedSlotIds}
           currentSlotId={isViewingToday ? currentSlotId : null}
           isNightFoldExpanded={isNightFoldExpanded}
+          nightFoldRange={nightFoldRange}
           onSelectSlot={selectSlot}
-          onEditSlotPlan={editSlotPlan}
+          onFocusSlotEditorField={focusSlotEditorField}
           onMoveSelectedPlans={moveSelectedPlans}
+          onFoldSlotIntoNight={foldSlotIntoNight}
+          onResetNightFoldRange={resetNightFoldRange}
           onExpandNightFold={() => setIsNightFoldManuallyExpanded(true)}
         />
 
@@ -1266,7 +1331,7 @@ export function App() {
           <AppUpdatePanel />
           <SlotEditor
             slot={selectedEditorSlot}
-            planFocusRequestId={planFocusRequestId}
+            focusRequest={slotEditorFocusRequest}
             selectedSlotCount={selectedSlotIds.length}
             canMergeSelectedSlots={canMergeSelectedSlots}
             canSplitMergedRange={selectedMergedRange !== null}
