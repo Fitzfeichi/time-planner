@@ -4,6 +4,20 @@ interface ApplyMergedRangeResult {
   didMerge: boolean;
   slots: TimeSlot[];
   mergedRanges: MergedTimeRange[];
+  mergedSlotIds: string[];
+}
+
+interface SplitOneMergedRangeResult {
+  didSplit: boolean;
+  mergedRanges: MergedTimeRange[];
+  remainingSlotIds: string[];
+  detachedSlotId: string | null;
+}
+
+interface NormalizedMergeSelection {
+  indexes: number[];
+  slotIds: string[];
+  existingRange: MergedTimeRange | null;
 }
 
 function createRangeId(startSlotId: string, endSlotId: string) {
@@ -28,13 +42,97 @@ function getSortedUniqueSlotIndexes(slots: TimeSlot[], slotIds: string[]) {
     .sort((first, second) => first - second);
 }
 
-function rangeOverlapsSlotIds(
+function isContiguousIndexes(indexes: number[]) {
+  return indexes.every((index, offset) => {
+    if (offset === 0) {
+      return true;
+    }
+
+    return index === indexes[offset - 1] + 1;
+  });
+}
+
+function isBlankSlot(slot: TimeSlot) {
+  return slot.plan.trim() === '' && slot.actual.trim() === '' && slot.status === 'empty';
+}
+
+function getNormalizedMergeSelection(
   slots: TimeSlot[],
-  range: MergedTimeRange,
-  slotIds: string[],
+  mergedRanges: MergedTimeRange[] = [],
+  selectedSlotIds: string[],
+): NormalizedMergeSelection | null {
+  const selectedIndexes = getSortedUniqueSlotIndexes(slots, selectedSlotIds);
+
+  if (selectedIndexes.length < 2) {
+    return null;
+  }
+
+  const slotIndexById = getSlotIndexById(slots);
+  const expandedIndexSet = new Set<number>();
+  const existingRangeIds = new Set<string>();
+
+  selectedIndexes.forEach((index) => {
+    const slot = slots[index];
+    const mergedRange = getMergedRangeForSlot(slots, mergedRanges, slot.id);
+
+    if (mergedRange === null) {
+      expandedIndexSet.add(index);
+      return;
+    }
+
+    existingRangeIds.add(mergedRange.id);
+    getMergedRangeSlotIds(slots, mergedRange).forEach((rangeSlotId) => {
+      const rangeSlotIndex = slotIndexById.get(rangeSlotId);
+
+      if (rangeSlotIndex !== undefined) {
+        expandedIndexSet.add(rangeSlotIndex);
+      }
+    });
+  });
+
+  if (existingRangeIds.size > 1) {
+    return null;
+  }
+
+  const indexes = Array.from(expandedIndexSet).sort((first, second) => first - second);
+
+  if (indexes.length < 2 || !isContiguousIndexes(indexes)) {
+    return null;
+  }
+
+  const existingRangeId = Array.from(existingRangeIds)[0];
+  const existingRange =
+    existingRangeId === undefined
+      ? null
+      : mergedRanges.find((range) => range.id === existingRangeId) ?? null;
+
+  return {
+    indexes,
+    slotIds: indexes.map((index) => slots[index].id),
+    existingRange,
+  };
+}
+
+function getMergeSourceSlot(
+  slots: TimeSlot[],
+  selection: NormalizedMergeSelection,
+  sourceSlotId: string,
 ) {
-  const rangeSlotIds = new Set(getMergedRangeSlotIds(slots, range));
-  return slotIds.some((slotId) => rangeSlotIds.has(slotId));
+  if (selection.existingRange !== null) {
+    return (
+      slots.find((slot) => slot.id === selection.existingRange?.startSlotId) ??
+      slots[selection.indexes[0]]
+    );
+  }
+
+  const selectedSlots = selection.indexes.map((index) => slots[index]);
+  const plannedSlots = selectedSlots.filter((slot) => slot.plan.trim() !== '');
+
+  return (
+    (plannedSlots.length === 1 ? plannedSlots[0] : undefined) ??
+    slots.find((slot) => slot.id === sourceSlotId) ??
+    slots[selection.indexes[0]]
+  );
 }
 
 export function getMergedRangeSlotIds(slots: TimeSlot[], range: MergedTimeRange) {
@@ -64,44 +162,38 @@ export function canCreateMergedRange(
   mergedRanges: MergedTimeRange[] = [],
   selectedSlotIds: string[],
 ) {
-  const selectedIndexes = getSortedUniqueSlotIndexes(slots, selectedSlotIds);
-
-  if (selectedIndexes.length < 2) {
-    return false;
-  }
-
-  const isContiguous = selectedIndexes.every((index, offset) => {
-    if (offset === 0) {
-      return true;
-    }
-
-    return index === selectedIndexes[offset - 1] + 1;
-  });
-
-  if (!isContiguous) {
-    return false;
-  }
-
-  const selectedIds = selectedIndexes.map((index) => slots[index].id);
-  return !mergedRanges.some((range) => rangeOverlapsSlotIds(slots, range, selectedIds));
+  return getNormalizedMergeSelection(slots, mergedRanges, selectedSlotIds) !== null;
 }
 
 export function hasMergedRangeConflict(
   slots: TimeSlot[],
+  mergedRanges: MergedTimeRange[] = [],
   selectedSlotIds: string[],
   sourceSlotId: string,
 ) {
-  const sourceSlot = slots.find((slot) => slot.id === sourceSlotId);
+  const selection = getNormalizedMergeSelection(slots, mergedRanges, selectedSlotIds);
 
-  if (sourceSlot === undefined) {
+  if (selection === null) {
     return false;
   }
 
-  return selectedSlotIds.some((slotId) => {
+  const sourceSlot = getMergeSourceSlot(slots, selection, sourceSlotId);
+  const existingRangeSlotIds = new Set(
+    selection.existingRange === null
+      ? []
+      : getMergedRangeSlotIds(slots, selection.existingRange),
+  );
+
+  return selection.slotIds.some((slotId) => {
+    if (existingRangeSlotIds.has(slotId)) {
+      return false;
+    }
+
     const slot = slots.find((item) => item.id === slotId);
 
     return (
       slot !== undefined &&
+      !isBlankSlot(slot) &&
       (slot.plan !== sourceSlot.plan ||
         slot.actual !== sourceSlot.actual ||
         slot.status !== sourceSlot.status)
@@ -115,24 +207,30 @@ export function applyMergedRange(
   selectedSlotIds: string[],
   sourceSlotId: string,
 ): ApplyMergedRangeResult {
-  if (!canCreateMergedRange(slots, mergedRanges, selectedSlotIds)) {
+  const selection = getNormalizedMergeSelection(slots, mergedRanges, selectedSlotIds);
+
+  if (selection === null) {
     return {
       didMerge: false,
       slots,
       mergedRanges,
+      mergedSlotIds: [],
     };
   }
 
-  const selectedIndexes = getSortedUniqueSlotIndexes(slots, selectedSlotIds);
-  const sourceSlot = slots.find((slot) => slot.id === sourceSlotId) ?? slots[selectedIndexes[0]];
-  const selectedIndexSet = new Set(selectedIndexes);
-  const startSlotId = slots[selectedIndexes[0]].id;
-  const endSlotId = slots[selectedIndexes[selectedIndexes.length - 1]].id;
+  const sourceSlot = getMergeSourceSlot(slots, selection, sourceSlotId);
+  const selectedIndexSet = new Set(selection.indexes);
+  const startSlotId = slots[selection.indexes[0]].id;
+  const endSlotId = slots[selection.indexes[selection.indexes.length - 1]].id;
   const nextRange: MergedTimeRange = {
-    id: createRangeId(startSlotId, endSlotId),
+    id: selection.existingRange?.id ?? createRangeId(startSlotId, endSlotId),
     startSlotId,
     endSlotId,
   };
+  const nextMergedRanges =
+    selection.existingRange === null
+      ? [...mergedRanges, nextRange]
+      : mergedRanges.map((range) => (range.id === selection.existingRange?.id ? nextRange : range));
 
   return {
     didMerge: true,
@@ -146,7 +244,8 @@ export function applyMergedRange(
           }
         : slot,
     ),
-    mergedRanges: [...mergedRanges, nextRange],
+    mergedRanges: nextMergedRanges,
+    mergedSlotIds: selection.slotIds,
   };
 }
 
@@ -171,4 +270,58 @@ export function removeMergedRangeForSlot(
       slotNumber > endNumber
     );
   });
+}
+
+export function splitOneSlotFromMergedRangeEnd(
+  slots: TimeSlot[],
+  mergedRanges: MergedTimeRange[] = [],
+  slotId: string,
+): SplitOneMergedRangeResult {
+  const mergedRange = getMergedRangeForSlot(slots, mergedRanges, slotId);
+
+  if (mergedRange === null) {
+    return {
+      didSplit: false,
+      mergedRanges,
+      remainingSlotIds: [slotId],
+      detachedSlotId: null,
+    };
+  }
+
+  const rangeSlotIds = getMergedRangeSlotIds(slots, mergedRange);
+
+  if (rangeSlotIds.length < 2) {
+    return {
+      didSplit: false,
+      mergedRanges,
+      remainingSlotIds: rangeSlotIds,
+      detachedSlotId: null,
+    };
+  }
+
+  const detachedSlotId = rangeSlotIds[rangeSlotIds.length - 1];
+  const remainingSlotIds = rangeSlotIds.slice(0, -1);
+
+  if (rangeSlotIds.length === 2) {
+    return {
+      didSplit: true,
+      mergedRanges: removeMergedRangeForSlot(mergedRanges, slotId),
+      remainingSlotIds: [remainingSlotIds[0]],
+      detachedSlotId,
+    };
+  }
+
+  const nextRange: MergedTimeRange = {
+    ...mergedRange,
+    endSlotId: remainingSlotIds[remainingSlotIds.length - 1],
+  };
+
+  return {
+    didSplit: true,
+    mergedRanges: mergedRanges.map((range) =>
+      range.id === mergedRange.id ? nextRange : range,
+    ),
+    remainingSlotIds,
+    detachedSlotId,
+  };
 }

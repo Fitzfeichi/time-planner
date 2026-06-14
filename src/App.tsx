@@ -20,6 +20,7 @@ import {
   getMergedRangeSlotIds,
   hasMergedRangeConflict,
   removeMergedRangeForSlot,
+  splitOneSlotFromMergedRangeEnd,
 } from './lib/mergedRanges';
 import { isNightFoldSlot, shouldExpandNightFoldForSlots } from './lib/nightFold';
 import { readMiniNeighborPreference } from './lib/miniNeighborPreference';
@@ -850,7 +851,14 @@ export function App() {
       return;
     }
 
-    if (hasMergedRangeConflict(dayPlan.slots, selectedSlotIds, selectedSlotId)) {
+    if (
+      hasMergedRangeConflict(
+        dayPlan.slots,
+        dayPlan.mergedRanges,
+        selectedSlotIds,
+        selectedSlotId,
+      )
+    ) {
       const shouldMerge = window.confirm(
         '这些时间格里已有不同内容。合并后会以当前右侧正在编辑的时间格为准，覆盖这一段的计划、实际和状态。确定继续吗？',
       );
@@ -876,10 +884,37 @@ export function App() {
       slots: mergeResult.slots,
       mergedRanges: mergeResult.mergedRanges,
     }));
-    setSelectedSlotIds(getMergedRangeSlotIds(mergeResult.slots, mergeResult.mergedRanges.at(-1)!));
+    setSelectedSlotIds(mergeResult.mergedSlotIds);
+    setSelectionAnchorSlotId(mergeResult.mergedSlotIds[0]);
   }
 
-  function splitSelectedMergedRange() {
+  function splitOneMergedSlot() {
+    if (selectedMergedRange === null) {
+      return;
+    }
+
+    const splitResult = splitOneSlotFromMergedRangeEnd(
+      dayPlan.slots,
+      dayPlan.mergedRanges,
+      selectedSlotId,
+    );
+
+    if (!splitResult.didSplit) {
+      return;
+    }
+
+    updatePlanForCurrentDate((previous) => ({
+      ...previous,
+      mergedRanges: splitResult.mergedRanges,
+    }));
+
+    const nextSelectedSlotId = splitResult.remainingSlotIds[0] ?? selectedSlotId;
+    setSelectedSlotId(nextSelectedSlotId);
+    setSelectedSlotIds(splitResult.remainingSlotIds);
+    setSelectionAnchorSlotId(nextSelectedSlotId);
+  }
+
+  function splitAllSelectedMergedRange() {
     if (selectedMergedRange === null) {
       return;
     }
@@ -1236,7 +1271,8 @@ export function App() {
             canMergeSelectedSlots={canMergeSelectedSlots}
             canSplitMergedRange={selectedMergedRange !== null}
             onMergeSelectedSlots={mergeSelectedSlots}
-            onSplitMergedRange={splitSelectedMergedRange}
+            onSplitOneMergedSlot={splitOneMergedSlot}
+            onSplitAllMergedRange={splitAllSelectedMergedRange}
             onChange={updateSelectedSlot}
           />
           <ReviewPanel value={dayPlan.review} onChange={updateReview} />

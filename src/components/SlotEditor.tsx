@@ -9,7 +9,8 @@ interface SlotEditorProps {
   canMergeSelectedSlots: boolean;
   canSplitMergedRange: boolean;
   onMergeSelectedSlots: () => void;
-  onSplitMergedRange: () => void;
+  onSplitOneMergedSlot: () => void;
+  onSplitAllMergedRange: () => void;
   onChange: (slot: TimeSlot) => void;
 }
 
@@ -20,7 +21,8 @@ export function SlotEditor({
   canMergeSelectedSlots,
   canSplitMergedRange,
   onMergeSelectedSlots,
-  onSplitMergedRange,
+  onSplitOneMergedSlot,
+  onSplitAllMergedRange,
   onChange,
 }: SlotEditorProps) {
   const planInputRef = useRef<HTMLTextAreaElement>(null);
@@ -68,9 +70,14 @@ export function SlotEditor({
       {canSplitMergedRange || selectedSlotCount > 1 ? (
         <div className="merge-actions">
           {canSplitMergedRange ? (
-            <button type="button" onClick={onSplitMergedRange}>
-              拆分连续任务
-            </button>
+            <div className="split-actions">
+              <button type="button" onClick={onSplitOneMergedSlot}>
+                拆出一格
+              </button>
+              <button type="button" onClick={onSplitAllMergedRange}>
+                全部拆分
+              </button>
+            </div>
           ) : (
             <button
               type="button"
