@@ -16,41 +16,9 @@
 
 ## 使用方式
 
-这个项目目前是个人本地工具原型。第一次运行前需要先安装依赖：
+在 GitHub Releases 页面下载最新的 Windows `.exe` 安装包，安装后即可直接使用。
 
-```powershell
-npm.cmd install
-```
-
-启动 Tauri 桌面开发版：
-
-```powershell
-npm.cmd run tauri:dev
-```
-
-如果只想构建前端页面：
-
-```powershell
-npm.cmd run build
-```
-
-## 打包
-
-生成 Tauri Windows 安装包、签名和自动更新清单：
-
-```powershell
-npm.cmd run tauri:build
-```
-
-`package:tauri` 是同一条发布打包路径的别名：
-
-```powershell
-npm.cmd run package:tauri
-```
-
-打包产物会输出到 `src-tauri\target\release\bundle` 和 `release` 目录。`release` 属于本地构建产物，不提交到 GitHub。
-
-Tauri 自动更新优先使用阿里云 OSS 更新源，GitHub Releases 作为备用源。发布步骤见 `docs/tauri-auto-update.md`。
+后续发布新版本时，软件会在应用内自动检查更新；确认后即可下载并安装新版本，无需重复手动下载安装包。
 
 ## 数据说明
 
