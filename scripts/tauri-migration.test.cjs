@@ -78,17 +78,10 @@ test('Tauri package script copies the NSIS installer to release', () => {
   assert.match(packageScript, /src-tauri.+bundle.+nsis/s);
 });
 
-test('Tauri development launcher starts the desktop dev shell from the project root', () => {
-  const launcher = readText('打开Tauri开发版.bat');
-  const mainLauncher = readText('打开日计划.bat');
-  const miniLauncher = readText('打开当前任务小窗.bat');
-
-  for (const launcherSource of [launcher, mainLauncher, miniLauncher]) {
-    assert.match(launcherSource, /cd \/d "%~dp0"/);
-    assert.match(launcherSource, /call npm\.cmd run tauri:dev/);
-    assert.match(launcherSource, /pause/);
-    assert.equal(launcherSource.includes(`node_modules\\${legacyShellName}\\dist`), false);
-  }
+test('Windows bat launchers are not committed', () => {
+  assert.equal(fs.existsSync(path.join(rootDir, '打开Tauri开发版.bat')), false);
+  assert.equal(fs.existsSync(path.join(rootDir, '打开日计划.bat')), false);
+  assert.equal(fs.existsSync(path.join(rootDir, '打开当前任务小窗.bat')), false);
 });
 
 test('React uses a Tauri-only desktop bridge', () => {

@@ -539,7 +539,9 @@ export function App() {
   const miniShellRef = useRef<HTMLElement | null>(null);
   const lastMiniWindowHeight = useRef(0);
   const workspaceRef = useRef<HTMLElement | null>(null);
+  const sidePanelRef = useRef<HTMLElement | null>(null);
   const [sidePanelWidth, setSidePanelWidth] = useState(readSavedSidePanelWidth);
+  const [workspaceContentHeight, setWorkspaceContentHeight] = useState<number | null>(null);
   const [isWorkspaceResizing, setIsWorkspaceResizing] = useState(false);
 
   const currentDateKey = getDateKey(currentDate);
@@ -711,6 +713,43 @@ export function App() {
   useEffect(() => {
     saveSidePanelWidth(sidePanelWidth);
   }, [sidePanelWidth]);
+
+  useEffect(() => {
+    if (isMiniView || sidePanelRef.current === null) {
+      return;
+    }
+
+    const sidePanelElement = sidePanelRef.current;
+    let frameId: number | null = null;
+
+    function syncWorkspaceContentHeight() {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      frameId = window.requestAnimationFrame(() => {
+        const nextHeight = Math.ceil(sidePanelElement.getBoundingClientRect().height);
+        setWorkspaceContentHeight((previous) =>
+          previous === nextHeight ? previous : nextHeight,
+        );
+      });
+    }
+
+    syncWorkspaceContentHeight();
+
+    const resizeObserver = new ResizeObserver(syncWorkspaceContentHeight);
+    resizeObserver.observe(sidePanelElement);
+    window.addEventListener('resize', syncWorkspaceContentHeight);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', syncWorkspaceContentHeight);
+
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [isMiniView]);
 
   useEffect(() => {
     if (!isWorkspaceResizing) {
@@ -1163,6 +1202,9 @@ export function App() {
 
   const workspaceStyle = {
     '--side-panel-width': `${sidePanelWidth}px`,
+    ...(workspaceContentHeight === null
+      ? {}
+      : { '--workspace-content-height': `${workspaceContentHeight}px` }),
   } as CSSProperties;
 
   if (isMiniView) {
@@ -1318,7 +1360,7 @@ export function App() {
           onKeyDown={handleWorkspaceDividerKeyDown}
         />
 
-        <aside className="side-panel">
+        <aside className="side-panel" ref={sidePanelRef}>
           <CurrentTaskCard
             slot={currentSlot}
             now={now}

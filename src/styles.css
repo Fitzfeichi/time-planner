@@ -201,9 +201,10 @@ h1 {
 
 .workspace-divider {
   position: relative;
-  align-self: stretch;
+  align-self: start;
   width: var(--workspace-divider-width);
   min-width: var(--workspace-divider-width);
+  height: var(--workspace-content-height, auto);
   min-height: 160px;
   border: 0;
   border-radius: 999px;
@@ -252,7 +253,10 @@ h1 {
 .time-table {
   --slot-list-scrollbar-width: 16px;
 
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
+  height: var(--workspace-content-height, auto);
   overflow: hidden;
   box-shadow: var(--shadow-panel);
 }
@@ -280,7 +284,7 @@ h1 {
 }
 
 .slot-list {
-  max-height: calc(100vh - 170px);
+  min-height: 0;
   overflow: auto;
 }
 
@@ -462,6 +466,8 @@ h1 {
 
 .side-panel {
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 14px;
   min-width: 0;
   position: sticky;
@@ -475,6 +481,7 @@ h1 {
 
 .current-task-card {
   display: grid;
+  align-content: start;
   gap: 16px;
   padding: 18px;
   border-color: rgba(0, 102, 204, 0.18);
@@ -579,12 +586,17 @@ h1 {
   gap: 8px;
 }
 
+.current-task-actions button {
+  align-self: center;
+}
+
 .current-task-actions.with-toggle .mini-neighbor-toggle {
   grid-column: 1 / -1;
 }
 
 .app-update-panel {
   display: grid;
+  align-content: start;
   gap: 12px;
 }
 
@@ -593,6 +605,7 @@ h1 {
 }
 
 .update-check-button {
+  align-self: start;
   min-height: 38px;
   width: 100%;
   border: 1px solid var(--color-hairline);
@@ -1055,6 +1068,7 @@ textarea:focus {
   .workspace {
     grid-template-columns: 1fr;
     gap: 18px;
+    align-items: start;
   }
 
   .workspace-divider {
@@ -1067,6 +1081,10 @@ textarea:focus {
 
   .slot-list {
     max-height: none;
+  }
+
+  .time-table {
+    height: auto;
   }
 
   .current-task-card {

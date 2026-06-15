@@ -28,8 +28,6 @@ npm.cmd install
 npm.cmd run tauri:dev
 ```
 
-也可以双击项目里的 `打开日计划.bat` 启动 Tauri 开发版。`打开当前任务小窗.bat` 不再启动旧桌面壳，它会打开 Tauri 主窗口；进入软件后点击当前任务卡片里的小窗按钮打开小窗。
-
 如果只想构建前端页面：
 
 ```powershell
