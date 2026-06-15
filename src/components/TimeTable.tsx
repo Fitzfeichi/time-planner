@@ -1,12 +1,19 @@
-import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
+import { useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { getMergedRangeForSlot, getMergedRangeSlotIds } from '../lib/mergedRanges';
-import { isNightFoldSlot } from '../lib/nightFold';
+import {
+  expandNightFoldRangeForAdjacentSlot,
+  isDefaultNightFoldRange,
+  isSlotInNightFoldRange,
+} from '../lib/nightFold';
 import { statusLabels } from '../lib/status';
-import type { MergedTimeRange, SlotSelectionMode, TimeSlot } from '../types';
+import type { MergedTimeRange, NightFoldRange, SlotSelectionMode, TimeSlot } from '../types';
 
 type DropIndicatorPosition = 'before' | 'after';
+type DropIndicatorTarget = 'slot' | 'night-fold';
+type EditableSlotField = 'plan' | 'actual';
 
 interface DropIndicator {
+  target: DropIndicatorTarget;
   slotId: string;
   position: DropIndicatorPosition;
   insertIndex: number;
@@ -28,9 +35,12 @@ interface TimeTableProps {
   selectedSlotIds: string[];
   currentSlotId: string | null;
   isNightFoldExpanded: boolean;
+  nightFoldRange: NightFoldRange;
   onSelectSlot: (slotId: string, mode: SlotSelectionMode) => void;
-  onEditSlotPlan: (slotId: string) => void;
+  onFocusSlotEditorField: (slotId: string, field: EditableSlotField) => void;
   onMoveSelectedPlans: (dragStartSlotId: string, insertIndex: number) => void;
+  onFoldSlotIntoNight: (slotId: string) => void;
+  onResetNightFoldRange: () => void;
   onExpandNightFold: () => void;
 }
 
@@ -42,9 +52,12 @@ export function TimeTable({
   selectedSlotIds,
   currentSlotId,
   isNightFoldExpanded,
+  nightFoldRange,
   onSelectSlot,
-  onEditSlotPlan,
+  onFocusSlotEditorField,
   onMoveSelectedPlans,
+  onFoldSlotIntoNight,
+  onResetNightFoldRange,
   onExpandNightFold,
 }: TimeTableProps) {
   const [draggedSlotId, setDraggedSlotId] = useState<string | null>(null);
@@ -140,9 +153,35 @@ export function TimeTable({
     }
 
     return {
+      target: 'slot',
       slotId,
       position,
       insertIndex,
+    };
+  }
+
+  function getNightFoldDropIndicator(activeDraggedSlotId: string | null): DropIndicator | null {
+    if (activeDraggedSlotId === null) {
+      return null;
+    }
+
+    const draggedSlotIds = getDraggedSlotIds(activeDraggedSlotId);
+
+    if (draggedSlotIds.length !== 1) {
+      return null;
+    }
+
+    const draggedSlotId = draggedSlotIds[0];
+
+    if (expandNightFoldRangeForAdjacentSlot(nightFoldRange, draggedSlotId) === null) {
+      return null;
+    }
+
+    return {
+      target: 'night-fold',
+      slotId: draggedSlotId,
+      position: 'after',
+      insertIndex: -1,
     };
   }
 
@@ -167,12 +206,46 @@ export function TimeTable({
     onSelectSlot(slotId, getSelectionMode(event));
   }
 
+  function getEditableFieldFromColumn(
+    event: MouseEvent<HTMLButtonElement>,
+  ): EditableSlotField | null {
+    const planElement = event.currentTarget.querySelector<HTMLElement>('[data-edit-field="plan"]');
+    const actualElement = event.currentTarget.querySelector<HTMLElement>(
+      '[data-edit-field="actual"]',
+    );
+    const clientX = event.clientX;
+
+    if (planElement !== null) {
+      const planRect = planElement.getBoundingClientRect();
+
+      if (clientX >= planRect.left && clientX <= planRect.right) {
+        return 'plan';
+      }
+    }
+
+    if (actualElement !== null) {
+      const actualRect = actualElement.getBoundingClientRect();
+
+      if (clientX >= actualRect.left && clientX <= actualRect.right) {
+        return 'actual';
+      }
+    }
+
+    return null;
+  }
+
   function handleSlotDoubleClick(event: MouseEvent<HTMLButtonElement>, slotId: string) {
     if (event.shiftKey || event.ctrlKey || event.metaKey) {
       return;
     }
 
-    onEditSlotPlan(slotId);
+    const editableField = getEditableFieldFromColumn(event);
+
+    if (editableField === null) {
+      return;
+    }
+
+    onFocusSlotEditorField(slotId, editableField);
   }
 
   function getPointerTargetSlot(clientX: number, clientY: number) {
@@ -180,6 +253,15 @@ export function TimeTable({
 
     if (!(targetElement instanceof HTMLElement)) {
       return null;
+    }
+
+    const nightFoldTarget = targetElement.closest<HTMLElement>('[data-night-fold-target="true"]');
+
+    if (nightFoldTarget !== null) {
+      return {
+        slotId: 'night-fold',
+        targetButton: null,
+      };
     }
 
     const targetButton = targetElement.closest<HTMLButtonElement>('.slot-row[data-slot-id]');
@@ -211,6 +293,10 @@ export function TimeTable({
 
     if (targetSlot === null) {
       return null;
+    }
+
+    if (targetSlot.targetButton === null) {
+      return getNightFoldDropIndicator(pointerDrag.slotId);
     }
 
     return getDropIndicator(
@@ -284,7 +370,11 @@ export function TimeTable({
       const nextDropIndicator = getPointerDropIndicator(event);
 
       if (nextDropIndicator !== null) {
-        onMoveSelectedPlans(pointerDrag.slotId, nextDropIndicator.insertIndex);
+        if (nextDropIndicator.target === 'night-fold') {
+          onFoldSlotIntoNight(nextDropIndicator.slotId);
+        } else {
+          onMoveSelectedPlans(pointerDrag.slotId, nextDropIndicator.insertIndex);
+        }
       }
 
       window.setTimeout(() => {
@@ -301,6 +391,20 @@ export function TimeTable({
     }
 
     clearDragState();
+  }
+
+  function handleNightFoldKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+
+    event.preventDefault();
+    onExpandNightFold();
+  }
+
+  function handleResetNightFoldRange(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    onResetNightFoldRange();
   }
 
   return (
@@ -324,27 +428,54 @@ export function TimeTable({
             return null;
           }
 
-          if (!isNightFoldExpanded && isNightFoldSlot(slot.id)) {
-            if (slot.id !== 'slot-1') {
+          if (!isNightFoldExpanded && isSlotInNightFoldRange(slot.id, nightFoldRange)) {
+            if (slot.id !== nightFoldRange.startSlotId) {
               return null;
             }
 
-            const isCurrentFold = currentSlotId !== null && isNightFoldSlot(currentSlotId);
+            const rangeEndSlot =
+              slots.find((item) => item.id === nightFoldRange.endSlotId) ?? slot;
+            const isCurrentFold =
+              currentSlotId !== null && isSlotInNightFoldRange(currentSlotId, nightFoldRange);
+            const isDropIntoNight = dropIndicator?.target === 'night-fold';
+            const canResetNightFoldRange = !isDefaultNightFoldRange(nightFoldRange);
 
             return (
-              <button
-                type="button"
+              <div
                 key="night-fold"
-                className={['slot-row', 'night-fold-row', isCurrentFold ? 'current' : '']
+                data-night-fold-target="true"
+                role="button"
+                tabIndex={0}
+                className={[
+                  'slot-row',
+                  'night-fold-row',
+                  isCurrentFold ? 'current' : '',
+                  isDropIntoNight ? 'drop-into-night' : '',
+                ]
                   .filter(Boolean)
                   .join(' ')}
                 onClick={onExpandNightFold}
+                onKeyDown={handleNightFoldKeyDown}
               >
-                <span className="slot-time">00:30 - 08:00</span>
+                <span className="slot-time">
+                  {slot.start} - {rangeEndSlot.end}
+                </span>
                 <span className="slot-text">夜间时间已折叠</span>
-                <span className="slot-text">点击展开</span>
+                <span className="slot-text">
+                  {canResetNightFoldRange ? (
+                    <button
+                      type="button"
+                      className="night-fold-reset-button"
+                      onClick={handleResetNightFoldRange}
+                    >
+                      恢复默认
+                    </button>
+                  ) : (
+                    '点击展开'
+                  )}
+                </span>
                 <span className="status-pill">夜间</span>
-              </button>
+              </div>
             );
           }
 
@@ -362,9 +493,13 @@ export function TimeTable({
           const isDragging =
             daySlot.id === draggedSlotId || (isDraggingSelectedGroup && isSelected);
           const isDropBefore =
-            dropIndicator?.slotId === daySlot.id && dropIndicator.position === 'before';
+            dropIndicator?.target === 'slot' &&
+            dropIndicator.slotId === daySlot.id &&
+            dropIndicator.position === 'before';
           const isDropAfter =
-            dropIndicator?.slotId === daySlot.id && dropIndicator.position === 'after';
+            dropIndicator?.target === 'slot' &&
+            dropIndicator.slotId === daySlot.id &&
+            dropIndicator.position === 'after';
 
           return (
             <button
@@ -395,8 +530,12 @@ export function TimeTable({
               <span className="slot-time">
                 {daySlot.start} - {displayEnd}
               </span>
-              <span className="slot-text">{daySlot.plan}</span>
-              <span className="slot-text">{daySlot.actual}</span>
+              <span className="slot-text" data-edit-field="plan">
+                {daySlot.plan}
+              </span>
+              <span className="slot-text" data-edit-field="actual">
+                {daySlot.actual}
+              </span>
               <span className="status-pill">{statusLabels[daySlot.status]}</span>
             </button>
           );

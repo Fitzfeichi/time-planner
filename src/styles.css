@@ -345,12 +345,34 @@ h1 {
   background: var(--color-primary-soft);
 }
 
+.night-fold-row.drop-into-night {
+  background: var(--color-primary-soft);
+  box-shadow: inset 0 0 0 2px var(--color-primary-focus);
+}
+
 .night-fold-row .slot-time {
   color: var(--color-muted-strong);
 }
 
 .night-fold-row .status-pill {
   background: #ffffff;
+}
+
+.night-fold-reset-button {
+  border: 1px solid var(--color-hairline-soft);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #ffffff;
+  color: var(--color-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.night-fold-reset-button:hover {
+  border-color: rgba(0, 102, 204, 0.28);
+  background: #f7fbff;
 }
 
 .slot-row .status-pill {
@@ -395,6 +417,7 @@ h1 {
 }
 
 .slot-text {
+  justify-self: stretch;
   min-width: 0;
   overflow: hidden;
   color: var(--color-muted-strong);

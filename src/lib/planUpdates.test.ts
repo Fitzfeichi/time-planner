@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { updateSlotPlanForDate } from './planUpdates.js';
-import type { PlansByDate } from '../types.js';
+import { updateSlotPlanForDate } from './planUpdates.ts';
+import type { PlansByDate } from '../types.ts';
 
 test('updates only the matching slot plan for the target date', () => {
   const plansByDate: PlansByDate = {

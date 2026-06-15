@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createTimeSlots } from './timeSlots.js';
-import { getSlotNeighbors, getTaskBlockNeighbors } from './slotNeighbors.js';
-import type { MergedTimeRange } from '../types.js';
+import { createTimeSlots } from './timeSlots.ts';
+import { getSlotNeighbors, getTaskBlockNeighbors } from './slotNeighbors.ts';
+import type { MergedTimeRange } from '../types.ts';
 
 test('finds previous current and next slots for a middle slot', () => {
   const slots = createTimeSlots();

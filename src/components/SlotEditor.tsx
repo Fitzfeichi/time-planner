@@ -2,9 +2,16 @@ import { useEffect, useRef } from 'react';
 import { statusLabels, statusOptions } from '../lib/status';
 import type { SlotStatus, TimeSlot } from '../types';
 
+type EditableSlotField = 'plan' | 'actual';
+
+interface SlotEditorFocusRequest {
+  field: EditableSlotField;
+  requestId: number;
+}
+
 interface SlotEditorProps {
   slot: TimeSlot;
-  planFocusRequestId: number;
+  focusRequest: SlotEditorFocusRequest | null;
   selectedSlotCount: number;
   canMergeSelectedSlots: boolean;
   canSplitMergedRange: boolean;
@@ -16,7 +23,7 @@ interface SlotEditorProps {
 
 export function SlotEditor({
   slot,
-  planFocusRequestId,
+  focusRequest,
   selectedSlotCount,
   canMergeSelectedSlots,
   canSplitMergedRange,
@@ -26,22 +33,24 @@ export function SlotEditor({
   onChange,
 }: SlotEditorProps) {
   const planInputRef = useRef<HTMLTextAreaElement>(null);
+  const actualInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (planFocusRequestId === 0) {
+    if (focusRequest === null) {
       return;
     }
 
-    const planInput = planInputRef.current;
+    const targetInput =
+      focusRequest.field === 'plan' ? planInputRef.current : actualInputRef.current;
 
-    if (planInput === null) {
+    if (targetInput === null) {
       return;
     }
 
-    const textEnd = planInput.value.length;
-    planInput.focus();
-    planInput.setSelectionRange(textEnd, textEnd);
-  }, [planFocusRequestId]);
+    const textEnd = targetInput.value.length;
+    targetInput.focus();
+    targetInput.setSelectionRange(textEnd, textEnd);
+  }, [focusRequest]);
 
   function updateField(field: 'plan' | 'actual', value: string) {
     onChange({
@@ -108,6 +117,7 @@ export function SlotEditor({
       <label className="field">
         <span>实际内容</span>
         <textarea
+          ref={actualInputRef}
           value={slot.actual}
           onChange={(event) => updateField('actual', event.target.value)}
           placeholder="例如：实际完成了任务拆分和邮件回复"

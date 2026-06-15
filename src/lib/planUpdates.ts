@@ -1,6 +1,6 @@
-import type { PlansByDate } from '../types.js';
-import { getMergedRangeForSlot, getMergedRangeSlotIds } from './mergedRanges.js';
-import { createEmptyDayPlan } from './timeSlots.js';
+import type { PlansByDate } from '../types.ts';
+import { getMergedRangeForSlot, getMergedRangeSlotIds } from './mergedRanges.ts';
+import { createEmptyDayPlan } from './timeSlots.ts';
 
 export function updateSlotPlanForDate(
   plansByDate: PlansByDate,

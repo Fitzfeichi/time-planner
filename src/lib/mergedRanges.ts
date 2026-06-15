@@ -1,4 +1,4 @@
-import type { MergedTimeRange, TimeSlot } from '../types.js';
+import type { MergedTimeRange, TimeSlot } from '../types.ts';
 
 interface ApplyMergedRangeResult {
   didMerge: boolean;
