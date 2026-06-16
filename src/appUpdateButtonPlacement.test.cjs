@@ -45,3 +45,9 @@ test('app update control is styled as a compact header button', () => {
   assert.doesNotMatch(updateButtonBlock, /width:\s*100%;/);
   assert.match(updateButtonBlock, /white-space:\s*nowrap;/);
 });
+
+test('app update control uses short label and highlights pending updates', () => {
+  assert.match(updatePanelSource, /\{isBusy \? '检查更新中' : '更新'\}/);
+  assert.doesNotMatch(updatePanelSource, /'检查更新'/);
+  assert.match(updatePanelSource, /hasPendingUpdate \? 'update-check-button primary-button' : 'update-check-button'/);
+});

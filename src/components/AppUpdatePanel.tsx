@@ -33,6 +33,7 @@ export function AppUpdatePanel({ onConfirmRequest }: AppUpdatePanelProps) {
   const isTauri = useRef(isTauriRuntime());
   const hasCheckedOnStartup = useRef(false);
   const [phase, setPhase] = useState<UpdatePhase>('idle');
+  const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
   const [message, setMessage] = useState(
     isTauri.current ? '启动时会自动检查更新。' : '软件内更新仅支持 Tauri 安装版。',
   );
@@ -67,46 +68,79 @@ export function AppUpdatePanel({ onConfirmRequest }: AppUpdatePanelProps) {
     await relaunch();
   }
 
+  async function confirmAndInstallUpdate(update: Update) {
+    const shouldInstall = await onConfirmRequest({
+      title: `发现新版本 ${update.version}`,
+      message: '更新安装时软件会自动关闭并重启。',
+      confirmLabel: '立即更新',
+      cancelLabel: '稍后',
+      tone: 'default',
+    });
+
+    if (!shouldInstall) {
+      setMessage(`发现新版本 ${update.version}，你可以稍后再更新。`);
+      return;
+    }
+
+    setPendingUpdate(null);
+    await installUpdate(update);
+  }
+
   async function checkForUpdate(source: 'startup' | 'manual') {
-    if (!isTauri.current || phase === 'checking' || phase === 'downloading') {
+    if (!isTauri.current || phase === 'checking' || phase === 'downloading' || phase === 'installing') {
       return;
     }
 
     try {
       const { check } = await import('@tauri-apps/plugin-updater');
 
-      setPhase('checking');
-      setMessage(source === 'manual' ? '正在检查更新...' : '正在自动检查更新...');
+      if (source === 'manual') {
+        setPhase('checking');
+        setMessage('正在检查更新...');
+      }
 
       const update = await check({ timeout: 30000 });
 
       if (update === null) {
         setPhase('idle');
-        setMessage(source === 'manual' ? '当前已经是最新版本。' : '启动时会自动检查更新。');
+        setPendingUpdate(null);
+        setMessage(source === 'manual' ? '暂无更新，敬请期待~' : '启动时会自动检查更新。');
+
+        if (source === 'manual') {
+          await onConfirmRequest({
+            title: '暂无更新',
+            message: '暂无更新，敬请期待~',
+            confirmLabel: '知道了',
+            cancelLabel: null,
+            tone: 'default',
+          });
+        }
+
         return;
       }
 
       setPhase('idle');
+      setPendingUpdate(update);
       setMessage(`发现新版本 ${update.version}。`);
 
-      const shouldInstall = await onConfirmRequest({
-        title: `发现新版本 ${update.version}`,
-        message: '更新安装时软件会自动关闭并重启。',
-        confirmLabel: '立即更新',
-        cancelLabel: '稍后',
-        tone: 'default',
-      });
-
-      if (!shouldInstall) {
-        setMessage(`发现新版本 ${update.version}，你可以稍后再检查更新。`);
+      if (source === 'startup') {
         return;
       }
 
-      await installUpdate(update);
+      await confirmAndInstallUpdate(update);
     } catch (error) {
       setPhase('error');
       setMessage(error instanceof Error ? `检查更新失败：${error.message}` : '检查更新失败。');
     }
+  }
+
+  async function handleUpdateClick() {
+    if (pendingUpdate !== null) {
+      await confirmAndInstallUpdate(pendingUpdate);
+      return;
+    }
+
+    await checkForUpdate('manual');
   }
 
   useEffect(() => {
@@ -119,17 +153,18 @@ export function AppUpdatePanel({ onConfirmRequest }: AppUpdatePanelProps) {
   }, []);
 
   const isBusy = phase === 'checking' || phase === 'downloading' || phase === 'installing';
+  const hasPendingUpdate = pendingUpdate !== null;
 
   return (
     <button
       type="button"
-      className="update-check-button"
+      className={hasPendingUpdate ? 'update-check-button primary-button' : 'update-check-button'}
       title={message}
       aria-label="软件更新"
       disabled={!isTauri.current || isBusy}
-      onClick={() => void checkForUpdate('manual')}
+      onClick={() => void handleUpdateClick()}
     >
-      {isBusy ? '更新处理中' : '检查更新'}
+      {isBusy ? '检查更新中' : '更新'}
     </button>
   );
 }

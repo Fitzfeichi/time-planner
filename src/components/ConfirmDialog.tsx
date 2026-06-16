@@ -5,7 +5,7 @@ export interface ConfirmDialogContent {
   message: string;
   details?: string;
   confirmLabel: string;
-  cancelLabel?: string;
+  cancelLabel?: string | null;
   tone?: 'default' | 'warning';
 }
 
@@ -17,10 +17,16 @@ interface ConfirmDialogProps {
 
 export function ConfirmDialog({ request, onConfirm, onCancel }: ConfirmDialogProps) {
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const confirmButtonRef = useRef<HTMLButtonElement>(null);
   const dialogTitleId = 'confirm-dialog-title';
   const dialogDescriptionId = 'confirm-dialog-description';
 
   useEffect(() => {
+    if (request.cancelLabel === null) {
+      confirmButtonRef.current?.focus();
+      return;
+    }
+
     cancelButtonRef.current?.focus();
   }, [request]);
 
@@ -50,10 +56,17 @@ export function ConfirmDialog({ request, onConfirm, onCancel }: ConfirmDialogPro
         </div>
 
         <div className="confirm-dialog-actions">
-          <button type="button" ref={cancelButtonRef} onClick={onCancel}>
-            {request.cancelLabel ?? '取消'}
-          </button>
-          <button type="button" className="primary-button" onClick={onConfirm}>
+          {request.cancelLabel !== null ? (
+            <button type="button" ref={cancelButtonRef} onClick={onCancel}>
+              {request.cancelLabel ?? '取消'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="primary-button"
+            ref={confirmButtonRef}
+            onClick={onConfirm}
+          >
             {request.confirmLabel}
           </button>
         </div>
