@@ -1450,6 +1450,7 @@ export function App() {
     <main className="app-shell">
       <DayHeader
         date={currentDate}
+        isViewingToday={isViewingToday}
         updateAction={<AppUpdatePanel onConfirmRequest={requestConfirmation} />}
         onPreviousDay={() => moveDate(-1)}
         onNextDay={() => moveDate(1)}

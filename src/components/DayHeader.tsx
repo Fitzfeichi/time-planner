@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 interface DayHeaderProps {
   date: Date;
+  isViewingToday: boolean;
   updateAction?: ReactNode;
   onPreviousDay: () => void;
   onNextDay: () => void;
@@ -18,7 +19,14 @@ const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
   day: 'numeric',
 });
 
-export function DayHeader({ date, updateAction, onPreviousDay, onNextDay, onToday }: DayHeaderProps) {
+export function DayHeader({
+  date,
+  isViewingToday,
+  updateAction,
+  onPreviousDay,
+  onNextDay,
+  onToday,
+}: DayHeaderProps) {
   return (
     <header className="day-header">
       <div>
@@ -32,7 +40,7 @@ export function DayHeader({ date, updateAction, onPreviousDay, onNextDay, onToda
         <button type="button" onClick={onPreviousDay}>
           前一天
         </button>
-        <button type="button" className="primary-button" onClick={onToday}>
+        <button type="button" className={isViewingToday ? undefined : 'primary-button'} onClick={onToday}>
           回到今天
         </button>
         <button type="button" onClick={onNextDay}>
