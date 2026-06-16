@@ -310,6 +310,10 @@ h1 {
   background: var(--color-panel);
 }
 
+.slot-row.next-day-row {
+  cursor: pointer;
+}
+
 .slot-row.selected {
   background: var(--color-primary-soft);
 }
@@ -420,8 +424,23 @@ h1 {
 }
 
 .slot-time {
+  display: grid;
+  grid-template-columns: 2.75em max-content;
+  justify-content: center;
+  align-items: center;
   color: var(--color-ink);
   font-weight: 600;
+}
+
+.slot-time-value {
+  display: inline-block;
+}
+
+.slot-day-prefix {
+  justify-self: end;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
 }
 
 .slot-text {
@@ -600,12 +619,28 @@ h1 {
 
 .current-task-timing-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, max-content);
+  justify-content: end;
   gap: 8px;
 }
 
 .current-task-timing-actions button {
+  min-height: 29px;
   min-width: 0;
+  padding: 0 11px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.current-task-timing-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 8px;
+}
+
+.current-task-timing-row .current-task-timing-actions {
+  grid-column: 3;
 }
 
 .current-task-actions {
@@ -616,10 +651,6 @@ h1 {
 
 .current-task-actions button {
   align-self: center;
-}
-
-.current-task-actions.with-toggle .mini-neighbor-toggle {
-  grid-column: 1 / -1;
 }
 
 .update-check-button {

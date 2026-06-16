@@ -126,6 +126,12 @@ function getPreviousDateKey(date: Date) {
   return getDateKey(previousDate);
 }
 
+function getNextDateKey(date: Date) {
+  const nextDate = new Date(date);
+  nextDate.setDate(date.getDate() + 1);
+  return getDateKey(nextDate);
+}
+
 function isValidSlotId(value: unknown): value is string {
   if (typeof value !== 'string' || !value.startsWith('slot-')) {
     return false;
@@ -546,8 +552,10 @@ export function App() {
 
   const currentDateKey = getDateKey(currentDate);
   const todayDateKey = getDateKey(now);
+  const nextDateKey = getNextDateKey(currentDate);
   const dayPlan = getPlanForDate(plansByDate, currentDateKey);
   const todayPlan = getPlanForDate(plansByDate, todayDateKey);
+  const nextDayPlan = getPlanForDate(plansByDate, nextDateKey);
   const selectedSlot = dayPlan.slots.find((slot) => slot.id === selectedSlotId) ?? dayPlan.slots[0];
   const currentSlotId = getCurrentSlotId(now);
   const currentSlotNeighbors = getTaskBlockNeighbors(
@@ -679,13 +687,8 @@ export function App() {
 
     hasAutoScrolledToCurrentSlot.current = true;
 
-    window.requestAnimationFrame(() => {
-      document.querySelector(`[data-slot-id="${currentVisibleSlotId}"]`)?.scrollIntoView({
-        block: 'center',
-        behavior: 'auto',
-      });
-    });
-  }, [currentSlotId, currentVisibleSlotId, isMiniView, isNightFoldExpanded]);
+    scrollSlotListToSecondVisibleRow(todayDateKey, currentVisibleSlotId);
+  }, [currentSlotId, currentVisibleSlotId, isMiniView, isNightFoldExpanded, todayDateKey]);
 
   useEffect(() => {
     setPlansByDate((previous) => {
@@ -898,8 +901,27 @@ export function App() {
     setSelectionAnchorSlotId(nextFocusedSlotId);
   }
 
-  function focusSlotEditorField(slotId: string, field: EditableSlotField) {
-    selectSlot(slotId, 'replace');
+  function selectDatedSlot(dateKey: string, slotId: string, mode: SlotSelectionMode) {
+    if (dateKey === currentDateKey) {
+      selectSlot(slotId, mode);
+      return;
+    }
+
+    const date = createDateFromKey(dateKey);
+
+    if (date === null) {
+      return;
+    }
+
+    setCurrentDate(date);
+    setSelectedSlotId(slotId);
+    setSelectedSlotIds([slotId]);
+    setSelectionAnchorSlotId(slotId);
+    setIsNightFoldManuallyExpanded(isNightFoldSlot(slotId));
+  }
+
+  function focusDatedSlotEditorField(dateKey: string, slotId: string, field: EditableSlotField) {
+    selectDatedSlot(dateKey, slotId, 'replace');
     setSlotEditorFocusRequest((previous) => ({
       field,
       requestId: (previous?.requestId ?? 0) + 1,
@@ -1064,11 +1086,31 @@ export function App() {
       setIsNightFoldManuallyExpanded(true);
     }
 
+    scrollSlotListToSecondVisibleRow(todayDateKey, currentVisibleSlotId);
+  }
+
+  function scrollSlotListToSecondVisibleRow(dateKey: string, slotId: string) {
     window.requestAnimationFrame(() => {
-      document.querySelector(`[data-slot-id="${currentVisibleSlotId}"]`)?.scrollIntoView({
-        block: 'center',
-        behavior: 'smooth',
-      });
+      const workspaceElement = workspaceRef.current;
+
+      if (workspaceElement === null) {
+        return;
+      }
+
+      const listElement = workspaceElement.querySelector<HTMLElement>('.slot-list');
+      const slotElement = workspaceElement.querySelector<HTMLElement>(
+        `[data-date-key="${dateKey}"][data-slot-id="${slotId}"]`,
+      );
+
+      if (listElement === null || slotElement === null) {
+        return;
+      }
+
+      const listRect = listElement.getBoundingClientRect();
+      const slotRect = slotElement.getBoundingClientRect();
+      const secondVisibleRowOffset = slotRect.height;
+
+      listElement.scrollTop += slotRect.top - listRect.top - secondVisibleRowOffset;
     });
   }
 
@@ -1372,16 +1414,20 @@ export function App() {
         style={workspaceStyle}
       >
         <TimeTable
+          dateKey={currentDateKey}
           slots={slots}
           daySlots={dayPlan.slots}
           mergedRanges={dayPlan.mergedRanges}
+          tomorrowDateKey={isViewingToday ? nextDateKey : undefined}
+          tomorrowSlots={isViewingToday ? nextDayPlan.slots : undefined}
+          tomorrowMergedRanges={isViewingToday ? nextDayPlan.mergedRanges : undefined}
           selectedSlotId={selectedSlot.id}
           selectedSlotIds={selectedSlotIds}
           currentSlotId={isViewingToday ? currentSlotId : null}
           isNightFoldExpanded={isNightFoldExpanded}
           nightFoldRange={nightFoldRange}
-          onSelectSlot={selectSlot}
-          onFocusSlotEditorField={focusSlotEditorField}
+          onSelectDatedSlot={selectDatedSlot}
+          onFocusDatedSlotEditorField={focusDatedSlotEditorField}
           onMoveSelectedPlans={moveSelectedPlans}
           onFoldSlotIntoNight={foldSlotIntoNight}
           onResetNightFoldRange={resetNightFoldRange}
@@ -1412,8 +1458,6 @@ export function App() {
             isViewingToday={isViewingToday}
             onJumpToCurrent={jumpToCurrentSlot}
             onOpenMiniWindow={openMiniWindow}
-            showMiniNeighborTasks={showMiniNeighborTasks}
-            onToggleMiniNeighborTasks={toggleMiniNeighborTasks}
             canAdvancePlan={canAdvanceCurrentTaskPlan}
             canDeferPlan={canDeferCurrentTaskPlan}
             onAdvancePlan={advanceCurrentTaskPlan}

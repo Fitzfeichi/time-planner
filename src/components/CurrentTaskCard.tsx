@@ -13,7 +13,6 @@ interface CurrentTaskCardProps {
   onJumpToCurrent?: () => void;
   onOpenMiniWindow?: () => void;
   onPlanChange?: (plan: string) => void;
-  onToggleMiniNeighborTasks?: () => void;
   canAdvancePlan?: boolean;
   canDeferPlan?: boolean;
   onAdvancePlan?: () => void;
@@ -68,7 +67,6 @@ export function CurrentTaskCard({
   onJumpToCurrent,
   onOpenMiniWindow,
   onPlanChange,
-  onToggleMiniNeighborTasks,
   canAdvancePlan = false,
   canDeferPlan = false,
   onAdvancePlan,
@@ -191,28 +189,22 @@ export function CurrentTaskCard({
 
       {slot && isViewingToday ? (
         <div className="current-task-body">
-          <span className="current-task-time">
-            {slot.start} - {slot.end}
-          </span>
+          <div className="current-task-timing-row" aria-label="当前任务时间和调整按钮">
+            <span className="current-task-time">
+              {slot.start} - {slot.end}
+            </span>
+            {timingActions}
+          </div>
           <p className={hasPlan ? 'current-task-text' : 'current-task-text muted'}>
             {hasPlan ? slot.plan : '这个时间格还没有填写计划'}
           </p>
           {hasActual ? <p className="current-task-actual">实际：{slot.actual}</p> : null}
-          {timingActions}
         </div>
       ) : (
         <p className="current-task-empty">当前任务只跟随今天显示。请回到今天后再查看当前半小时任务。</p>
       )}
 
-      <div className="current-task-actions with-toggle">
-        <button
-          type="button"
-          className="mini-neighbor-toggle"
-          aria-pressed={showMiniNeighborTasks}
-          onClick={onToggleMiniNeighborTasks}
-        >
-          {showMiniNeighborTasks ? '隐藏前后任务' : '显示前后任务'}
-        </button>
+      <div className="current-task-actions">
         <button type="button" onClick={onJumpToCurrent}>
           跳到当前任务
         </button>

@@ -28,16 +28,24 @@ interface PointerDragState {
 }
 
 interface TimeTableProps {
+  dateKey: string;
   slots: TimeSlot[];
   daySlots: TimeSlot[];
   mergedRanges?: MergedTimeRange[];
+  tomorrowDateKey?: string;
+  tomorrowSlots?: TimeSlot[];
+  tomorrowMergedRanges?: MergedTimeRange[];
   selectedSlotId: string;
   selectedSlotIds: string[];
   currentSlotId: string | null;
   isNightFoldExpanded: boolean;
   nightFoldRange: NightFoldRange;
-  onSelectSlot: (slotId: string, mode: SlotSelectionMode) => void;
-  onFocusSlotEditorField: (slotId: string, field: EditableSlotField) => void;
+  onSelectDatedSlot: (dateKey: string, slotId: string, mode: SlotSelectionMode) => void;
+  onFocusDatedSlotEditorField: (
+    dateKey: string,
+    slotId: string,
+    field: EditableSlotField,
+  ) => void;
   onMoveSelectedPlans: (dragStartSlotId: string, insertIndex: number) => void;
   onFoldSlotIntoNight: (slotId: string) => void;
   onResetNightFoldRange: () => void;
@@ -45,16 +53,20 @@ interface TimeTableProps {
 }
 
 export function TimeTable({
+  dateKey,
   slots,
   daySlots,
   mergedRanges = [],
+  tomorrowDateKey,
+  tomorrowSlots,
+  tomorrowMergedRanges = [],
   selectedSlotId,
   selectedSlotIds,
   currentSlotId,
   isNightFoldExpanded,
   nightFoldRange,
-  onSelectSlot,
-  onFocusSlotEditorField,
+  onSelectDatedSlot,
+  onFocusDatedSlotEditorField,
   onMoveSelectedPlans,
   onFoldSlotIntoNight,
   onResetNightFoldRange,
@@ -197,13 +209,17 @@ export function TimeTable({
     return 'replace';
   }
 
-  function handleSlotClick(event: MouseEvent<HTMLButtonElement>, slotId: string) {
+  function handleSlotClick(event: MouseEvent<HTMLButtonElement>, rowDateKey: string, slotId: string) {
     if (didPointerDragRef.current) {
       didPointerDragRef.current = false;
       return;
     }
 
-    onSelectSlot(slotId, getSelectionMode(event));
+    onSelectDatedSlot(
+      rowDateKey,
+      slotId,
+      rowDateKey === dateKey ? getSelectionMode(event) : 'replace',
+    );
   }
 
   function getEditableFieldFromColumn(
@@ -234,7 +250,11 @@ export function TimeTable({
     return null;
   }
 
-  function handleSlotDoubleClick(event: MouseEvent<HTMLButtonElement>, slotId: string) {
+  function handleSlotDoubleClick(
+    event: MouseEvent<HTMLButtonElement>,
+    rowDateKey: string,
+    slotId: string,
+  ) {
     if (event.shiftKey || event.ctrlKey || event.metaKey) {
       return;
     }
@@ -245,7 +265,7 @@ export function TimeTable({
       return;
     }
 
-    onFocusSlotEditorField(slotId, editableField);
+    onFocusDatedSlotEditorField(rowDateKey, slotId, editableField);
   }
 
   function getPointerTargetSlot(clientX: number, clientY: number) {
@@ -272,7 +292,7 @@ export function TimeTable({
 
     const slotId = targetButton.dataset.slotId;
 
-    if (slotId === undefined) {
+    if (slotId === undefined || targetButton.dataset.dateKey !== dateKey) {
       return null;
     }
 
@@ -343,7 +363,7 @@ export function TimeTable({
       didPointerDragRef.current = true;
 
       if (!selectedSlotIds.includes(pointerDrag.slotId)) {
-        onSelectSlot(pointerDrag.slotId, 'replace');
+        onSelectDatedSlot(dateKey, pointerDrag.slotId, 'replace');
       }
 
       setDraggedSlotId(pointerDrag.slotId);
@@ -407,6 +427,31 @@ export function TimeTable({
     onResetNightFoldRange();
   }
 
+  const rowGroups = [
+    {
+      dateKey,
+      slots,
+      daySlots,
+      mergedRanges,
+      timePrefix: '',
+      canFoldNight: true,
+      canDrag: true,
+    },
+    ...(tomorrowDateKey !== undefined && tomorrowSlots !== undefined
+      ? [
+          {
+            dateKey: tomorrowDateKey,
+            slots: tomorrowSlots,
+            daySlots: tomorrowSlots,
+            mergedRanges: tomorrowMergedRanges,
+            timePrefix: '（明）',
+            canFoldNight: false,
+            canDrag: false,
+          },
+        ]
+      : []),
+  ];
+
   return (
     <section className="time-table" aria-label="一天时间表">
       <div className="table-head">
@@ -417,129 +462,149 @@ export function TimeTable({
       </div>
 
       <div className="slot-list">
-        {slots.map((slot) => {
-          const mergedRange = getMergedRangeForSlot(daySlots, mergedRanges, slot.id);
-          const mergedRangeSlotIds =
-            mergedRange === null ? [slot.id] : getMergedRangeSlotIds(daySlots, mergedRange);
-          const isMergedRangeStart =
-            mergedRange === null || mergedRange.startSlotId === slot.id;
+        {rowGroups.flatMap((row) =>
+          row.slots.map((slot) => {
+            const mergedRange = getMergedRangeForSlot(row.daySlots, row.mergedRanges, slot.id);
+            const mergedRangeSlotIds =
+              mergedRange === null ? [slot.id] : getMergedRangeSlotIds(row.daySlots, mergedRange);
+            const isMergedRangeStart =
+              mergedRange === null || mergedRange.startSlotId === slot.id;
 
-          if (!isMergedRangeStart) {
-            return null;
-          }
-
-          if (!isNightFoldExpanded && isSlotInNightFoldRange(slot.id, nightFoldRange)) {
-            if (slot.id !== nightFoldRange.startSlotId) {
+            if (!isMergedRangeStart) {
               return null;
             }
 
+            if (
+              row.canFoldNight &&
+              !isNightFoldExpanded &&
+              isSlotInNightFoldRange(slot.id, nightFoldRange)
+            ) {
+              if (slot.id !== nightFoldRange.startSlotId) {
+                return null;
+              }
+
+              const rangeEndSlot =
+                slots.find((item) => item.id === nightFoldRange.endSlotId) ?? slot;
+              const isCurrentFold =
+                currentSlotId !== null && isSlotInNightFoldRange(currentSlotId, nightFoldRange);
+              const isDropIntoNight = dropIndicator?.target === 'night-fold';
+              const canResetNightFoldRange = !isDefaultNightFoldRange(nightFoldRange);
+
+              return (
+                <div
+                  key={`${row.dateKey}-night-fold`}
+                  data-date-key={row.dateKey}
+                  data-night-fold-target="true"
+                  role="button"
+                  tabIndex={0}
+                  className={[
+                    'slot-row',
+                    'night-fold-row',
+                    isCurrentFold ? 'current' : '',
+                    isDropIntoNight ? 'drop-into-night' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={onExpandNightFold}
+                  onKeyDown={handleNightFoldKeyDown}
+                >
+                  <span className="slot-time">
+                    {slot.start} - {rangeEndSlot.end}
+                  </span>
+                  <span className="slot-text">夜间时间已折叠</span>
+                  <span className="slot-text">
+                    {canResetNightFoldRange ? (
+                      <button
+                        type="button"
+                        className="night-fold-reset-button"
+                        onClick={handleResetNightFoldRange}
+                      >
+                        恢复默认
+                      </button>
+                    ) : (
+                      '点击展开'
+                    )}
+                  </span>
+                  <span className="status-pill">夜间</span>
+                </div>
+              );
+            }
+
+            const daySlot = row.daySlots.find((item) => item.id === slot.id) ?? slot;
             const rangeEndSlot =
-              slots.find((item) => item.id === nightFoldRange.endSlotId) ?? slot;
-            const isCurrentFold =
-              currentSlotId !== null && isSlotInNightFoldRange(currentSlotId, nightFoldRange);
-            const isDropIntoNight = dropIndicator?.target === 'night-fold';
-            const canResetNightFoldRange = !isDefaultNightFoldRange(nightFoldRange);
+              mergedRange === null
+                ? daySlot
+                : row.daySlots.find((item) => item.id === mergedRange.endSlotId) ?? daySlot;
+            const displayEnd = mergedRange === null ? daySlot.end : rangeEndSlot.end;
+            const isActiveDate = row.dateKey === dateKey;
+            const isSelected =
+              isActiveDate && mergedRangeSlotIds.some((slotId) => selectedSlotIds.includes(slotId));
+            const isFocused = isActiveDate && mergedRangeSlotIds.includes(selectedSlotId);
+            const isCurrent =
+              isActiveDate && currentSlotId !== null && mergedRangeSlotIds.includes(currentSlotId);
+            const isDraggingSelectedGroup =
+              draggedSlotId !== null && selectedSlotIds.includes(draggedSlotId);
+            const isDragging =
+              row.canDrag &&
+              (daySlot.id === draggedSlotId || (isDraggingSelectedGroup && isSelected));
+            const isDropBefore =
+              row.canDrag &&
+              dropIndicator?.target === 'slot' &&
+              dropIndicator.slotId === daySlot.id &&
+              dropIndicator.position === 'before';
+            const isDropAfter =
+              row.canDrag &&
+              dropIndicator?.target === 'slot' &&
+              dropIndicator.slotId === daySlot.id &&
+              dropIndicator.position === 'after';
 
             return (
-              <div
-                key="night-fold"
-                data-night-fold-target="true"
-                role="button"
-                tabIndex={0}
+              <button
+                type="button"
+                key={`${row.dateKey}-${slot.id}`}
+                data-date-key={row.dateKey}
+                data-slot-id={daySlot.id}
+                aria-pressed={isSelected}
                 className={[
                   'slot-row',
-                  'night-fold-row',
-                  isCurrentFold ? 'current' : '',
-                  isDropIntoNight ? 'drop-into-night' : '',
+                  `status-${daySlot.status}`,
+                  mergedRange === null ? '' : 'merged-range',
+                  row.canDrag ? '' : 'next-day-row',
+                  isSelected ? 'selected' : '',
+                  isFocused ? 'focused' : '',
+                  isCurrent ? 'current' : '',
+                  isDragging ? 'dragging' : '',
+                  isDropBefore ? 'drop-before' : '',
+                  isDropAfter ? 'drop-after' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
-                onClick={onExpandNightFold}
-                onKeyDown={handleNightFoldKeyDown}
+                onClick={(event) => handleSlotClick(event, row.dateKey, daySlot.id)}
+                onDoubleClick={(event) => handleSlotDoubleClick(event, row.dateKey, daySlot.id)}
+                onPointerDown={
+                  row.canDrag ? (event) => handlePointerDown(event, daySlot.id) : undefined
+                }
+                onPointerMove={row.canDrag ? handlePointerMove : undefined}
+                onPointerUp={row.canDrag ? handlePointerUp : undefined}
+                onPointerCancel={row.canDrag ? handlePointerCancel : undefined}
               >
                 <span className="slot-time">
-                  {slot.start} - {rangeEndSlot.end}
+                  <span className="slot-day-prefix">{row.timePrefix}</span>
+                  <span className="slot-time-value">
+                    {daySlot.start} - {displayEnd}
+                  </span>
                 </span>
-                <span className="slot-text">夜间时间已折叠</span>
-                <span className="slot-text">
-                  {canResetNightFoldRange ? (
-                    <button
-                      type="button"
-                      className="night-fold-reset-button"
-                      onClick={handleResetNightFoldRange}
-                    >
-                      恢复默认
-                    </button>
-                  ) : (
-                    '点击展开'
-                  )}
+                <span className="slot-text" data-edit-field="plan">
+                  {daySlot.plan}
                 </span>
-                <span className="status-pill">夜间</span>
-              </div>
+                <span className="slot-text" data-edit-field="actual">
+                  {daySlot.actual}
+                </span>
+                <span className="status-pill">{statusLabels[daySlot.status]}</span>
+              </button>
             );
-          }
-
-          const daySlot = daySlots.find((item) => item.id === slot.id) ?? slot;
-          const rangeEndSlot =
-            mergedRange === null
-              ? daySlot
-              : daySlots.find((item) => item.id === mergedRange.endSlotId) ?? daySlot;
-          const displayEnd = mergedRange === null ? daySlot.end : rangeEndSlot.end;
-          const isSelected = mergedRangeSlotIds.some((slotId) => selectedSlotIds.includes(slotId));
-          const isFocused = mergedRangeSlotIds.includes(selectedSlotId);
-          const isCurrent = currentSlotId !== null && mergedRangeSlotIds.includes(currentSlotId);
-          const isDraggingSelectedGroup =
-            draggedSlotId !== null && selectedSlotIds.includes(draggedSlotId);
-          const isDragging =
-            daySlot.id === draggedSlotId || (isDraggingSelectedGroup && isSelected);
-          const isDropBefore =
-            dropIndicator?.target === 'slot' &&
-            dropIndicator.slotId === daySlot.id &&
-            dropIndicator.position === 'before';
-          const isDropAfter =
-            dropIndicator?.target === 'slot' &&
-            dropIndicator.slotId === daySlot.id &&
-            dropIndicator.position === 'after';
-
-          return (
-            <button
-              type="button"
-              key={slot.id}
-              data-slot-id={daySlot.id}
-              aria-pressed={isSelected}
-              className={[
-                'slot-row',
-                `status-${daySlot.status}`,
-                mergedRange === null ? '' : 'merged-range',
-                isSelected ? 'selected' : '',
-                isFocused ? 'focused' : '',
-                isCurrent ? 'current' : '',
-                isDragging ? 'dragging' : '',
-                isDropBefore ? 'drop-before' : '',
-                isDropAfter ? 'drop-after' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              onClick={(event) => handleSlotClick(event, daySlot.id)}
-              onDoubleClick={(event) => handleSlotDoubleClick(event, daySlot.id)}
-              onPointerDown={(event) => handlePointerDown(event, daySlot.id)}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerCancel}
-            >
-              <span className="slot-time">
-                {daySlot.start} - {displayEnd}
-              </span>
-              <span className="slot-text" data-edit-field="plan">
-                {daySlot.plan}
-              </span>
-              <span className="slot-text" data-edit-field="actual">
-                {daySlot.actual}
-              </span>
-              <span className="status-pill">{statusLabels[daySlot.status]}</span>
-            </button>
-          );
-        })}
+          }),
+        )}
       </div>
     </section>
   );

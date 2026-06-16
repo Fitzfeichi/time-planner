@@ -67,6 +67,29 @@ test('mini current task time and timing buttons share one header-side row', () =
   assert.doesNotMatch(compactBodyBeforeInput, /\{timingActions\}/);
 });
 
+test('main current task time shares one row with timing buttons and has no neighbor toggle', () => {
+  const mainBranchIndex = currentTaskCardSource.indexOf('<section className="current-task-card">');
+  const mainTimingRowIndex = currentTaskCardSource.indexOf(
+    'className="current-task-timing-row"',
+    mainBranchIndex,
+  );
+  const mainActionsIndex = currentTaskCardSource.indexOf(
+    'className="current-task-actions"',
+    mainBranchIndex,
+  );
+  const mainBodyIndex = currentTaskCardSource.indexOf('className="current-task-body"', mainBranchIndex);
+  const mainBodySource = currentTaskCardSource.slice(mainBodyIndex, mainActionsIndex);
+
+  assert.notEqual(mainBranchIndex, -1);
+  assert.notEqual(mainTimingRowIndex, -1);
+  assert.notEqual(mainActionsIndex, -1);
+  assert.ok(mainBodyIndex < mainTimingRowIndex);
+  assert.ok(mainTimingRowIndex < mainActionsIndex);
+  assert.match(mainBodySource, /current-task-time/);
+  assert.match(mainBodySource, /\{timingActions\}/);
+  assert.doesNotMatch(mainBodySource, /mini-neighbor-toggle/);
+});
+
 test('sticky note button icon uses a slightly heavier outline', () => {
   assert.match(stickyNoteIcon, /stroke-width="50"/);
   assert.match(stickyNoteIcon, /stroke-linecap="round"/);
