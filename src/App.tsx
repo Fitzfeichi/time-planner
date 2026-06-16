@@ -8,6 +8,7 @@ import {
   type PointerEvent,
 } from 'react';
 import { AppUpdatePanel } from './components/AppUpdatePanel';
+import { ConfirmDialog, type ConfirmDialogContent } from './components/ConfirmDialog';
 import { CurrentTaskCard } from './components/CurrentTaskCard';
 import { DayHeader } from './components/DayHeader';
 import { ReviewPanel } from './components/ReviewPanel';
@@ -467,6 +468,19 @@ function getSlotWithRangeTime(
   };
 }
 
+function getMergeConfirmationDetails(slots: TimeSlot[], selectedSlotIds: string[]) {
+  const selectedSlots = slots.filter((slot) => selectedSlotIds.includes(slot.id));
+
+  if (selectedSlots.length === 0) {
+    return '';
+  }
+
+  const firstSlot = selectedSlots[0];
+  const lastSlot = selectedSlots[selectedSlots.length - 1];
+
+  return `将合并 ${firstSlot.start} - ${lastSlot.end}，共 ${selectedSlots.length} 个时间格。`;
+}
+
 function StickyNoteView() {
   const [content, setContent] = useState(readStickyNoteContent);
 
@@ -549,6 +563,8 @@ export function App() {
   const [sidePanelWidth, setSidePanelWidth] = useState(readSavedSidePanelWidth);
   const [workspaceContentHeight, setWorkspaceContentHeight] = useState<number | null>(null);
   const [isWorkspaceResizing, setIsWorkspaceResizing] = useState(false);
+  const [confirmationRequest, setConfirmationRequest] = useState<ConfirmDialogContent | null>(null);
+  const confirmationResolver = useRef<((confirmed: boolean) => void) | null>(null);
 
   const currentDateKey = getDateKey(currentDate);
   const todayDateKey = getDateKey(now);
@@ -767,6 +783,13 @@ export function App() {
   }, [isWorkspaceResizing]);
 
   useEffect(() => {
+    return () => {
+      confirmationResolver.current?.(false);
+      confirmationResolver.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
     function handleStorage(event: StorageEvent) {
       if (event.key !== STORAGE_KEY || event.newValue === null) {
         return;
@@ -807,6 +830,21 @@ export function App() {
         [currentDateKey]: updater(previousDayPlan),
       };
     });
+  }
+
+  function requestConfirmation(request: ConfirmDialogContent) {
+    confirmationResolver.current?.(false);
+
+    return new Promise<boolean>((resolve) => {
+      confirmationResolver.current = resolve;
+      setConfirmationRequest(request);
+    });
+  }
+
+  function closeConfirmation(confirmed: boolean) {
+    confirmationResolver.current?.(confirmed);
+    confirmationResolver.current = null;
+    setConfirmationRequest(null);
   }
 
   function updateSelectedSlot(nextSlot: TimeSlot) {
@@ -981,28 +1019,7 @@ export function App() {
     setIsNightFoldManuallyExpanded(false);
   }
 
-  function mergeSelectedSlots() {
-    if (!canMergeSelectedSlots) {
-      return;
-    }
-
-    if (
-      hasMergedRangeConflict(
-        dayPlan.slots,
-        dayPlan.mergedRanges,
-        selectedSlotIds,
-        selectedSlotId,
-      )
-    ) {
-      const shouldMerge = window.confirm(
-        '这些时间格里已有不同内容。合并后会以当前右侧正在编辑的时间格为准，覆盖这一段的计划、实际和状态。确定继续吗？',
-      );
-
-      if (!shouldMerge) {
-        return;
-      }
-    }
-
+  function applySelectedSlotMerge() {
     const mergeResult = applyMergedRange(
       dayPlan.slots,
       dayPlan.mergedRanges,
@@ -1021,6 +1038,37 @@ export function App() {
     }));
     setSelectedSlotIds(mergeResult.mergedSlotIds);
     setSelectionAnchorSlotId(mergeResult.mergedSlotIds[0]);
+  }
+
+  async function mergeSelectedSlots() {
+    if (!canMergeSelectedSlots) {
+      return;
+    }
+
+    if (
+      hasMergedRangeConflict(
+        dayPlan.slots,
+        dayPlan.mergedRanges,
+        selectedSlotIds,
+        selectedSlotId,
+      )
+    ) {
+      const shouldMerge = await requestConfirmation({
+        title: '合并前确认',
+        message:
+          '这些时间格里已有不同内容。合并后会以当前右侧正在编辑的时间格为准，覆盖这一段的计划、实际和状态。',
+        details: getMergeConfirmationDetails(dayPlan.slots, selectedSlotIds),
+        confirmLabel: '继续合并',
+        cancelLabel: '取消',
+        tone: 'warning',
+      });
+
+      if (!shouldMerge) {
+        return;
+      }
+    }
+
+    applySelectedSlotMerge();
   }
 
   function splitOneMergedSlot() {
@@ -1402,7 +1450,7 @@ export function App() {
     <main className="app-shell">
       <DayHeader
         date={currentDate}
-        updateAction={<AppUpdatePanel />}
+        updateAction={<AppUpdatePanel onConfirmRequest={requestConfirmation} />}
         onPreviousDay={() => moveDate(-1)}
         onNextDay={() => moveDate(1)}
         onToday={goToday}
@@ -1477,6 +1525,14 @@ export function App() {
           <ReviewPanel value={dayPlan.review} onChange={updateReview} />
         </aside>
       </section>
+
+      {confirmationRequest ? (
+        <ConfirmDialog
+          request={confirmationRequest}
+          onConfirm={() => closeConfirmation(true)}
+          onCancel={() => closeConfirmation(false)}
+        />
+      ) : null}
     </main>
   );
 }

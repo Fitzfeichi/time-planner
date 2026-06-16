@@ -22,7 +22,10 @@ test('app update action is passed into the day header instead of the side panel'
 
   assert.ok(sidePanelMatch, 'Missing side panel');
   assert.doesNotMatch(sidePanelMatch[0], /<AppUpdatePanel\s*\/>/);
-  assert.match(appSource, /<DayHeader[\s\S]*?updateAction=\{<AppUpdatePanel\s*\/>\}[\s\S]*?onPreviousDay=/);
+  assert.match(
+    appSource,
+    /<DayHeader[\s\S]*?updateAction=\{<AppUpdatePanel onConfirmRequest=\{requestConfirmation\} \/>\}[\s\S]*?onPreviousDay=/,
+  );
 });
 
 test('day header renders the update action before the previous-day button', () => {
