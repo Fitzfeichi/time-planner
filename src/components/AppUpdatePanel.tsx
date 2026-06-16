@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DownloadEvent, Update } from '@tauri-apps/plugin-updater';
+import type { ConfirmDialogContent } from './ConfirmDialog';
 
 type UpdatePhase = 'idle' | 'checking' | 'downloading' | 'installing' | 'error';
 
 interface TauriWindow extends Window {
   __TAURI_INTERNALS__?: unknown;
+}
+
+interface AppUpdatePanelProps {
+  onConfirmRequest: (request: ConfirmDialogContent) => Promise<boolean>;
 }
 
 function isTauriRuntime() {
@@ -24,7 +29,7 @@ function formatProgress(downloadedBytes: number, contentLength: number | null) {
   return `正在下载更新包...${progress}%`;
 }
 
-export function AppUpdatePanel() {
+export function AppUpdatePanel({ onConfirmRequest }: AppUpdatePanelProps) {
   const isTauri = useRef(isTauriRuntime());
   const hasCheckedOnStartup = useRef(false);
   const [phase, setPhase] = useState<UpdatePhase>('idle');
@@ -84,9 +89,13 @@ export function AppUpdatePanel() {
       setPhase('idle');
       setMessage(`发现新版本 ${update.version}。`);
 
-      const shouldInstall = window.confirm(
-        `发现新版本 ${update.version}，是否现在更新？\n\n更新安装时软件会自动关闭并重启。`,
-      );
+      const shouldInstall = await onConfirmRequest({
+        title: `发现新版本 ${update.version}`,
+        message: '更新安装时软件会自动关闭并重启。',
+        confirmLabel: '立即更新',
+        cancelLabel: '稍后',
+        tone: 'default',
+      });
 
       if (!shouldInstall) {
         setMessage(`发现新版本 ${update.version}，你可以稍后再检查更新。`);
