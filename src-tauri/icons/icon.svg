@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="1024"
+  height="1024"
+  viewBox="0 0 1024 1024"
+>
+  <defs>
+    <linearGradient id="blueMain" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#56A8FF" />
+      <stop offset="100%" stop-color="#155CE1" />
+    </linearGradient>
+    <linearGradient id="blueDeep" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2B82FF" />
+      <stop offset="100%" stop-color="#0A56D9" />
+    </linearGradient>
+  </defs>
+
+  <rect
+    x="104"
+    y="104"
+    width="816"
+    height="816"
+    rx="176"
+    ry="176"
+    fill="#FCFDFF"
+    stroke="#E2EBF8"
+    stroke-width="12"
+  />
+
+  <circle
+    cx="448"
+    cy="444"
+    r="252"
+    fill="none"
+    stroke="url(#blueMain)"
+    stroke-width="92"
+  />
+  <circle
+    cx="448"
+    cy="444"
+    r="206"
+    fill="#FFFFFF"
+  />
+
+  <g stroke="url(#blueDeep)" stroke-width="38" stroke-linecap="round">
+    <line x1="448" y1="170" x2="448" y2="220" />
+    <line x1="174" y1="444" x2="224" y2="444" />
+    <line x1="672" y1="444" x2="722" y2="444" />
+  </g>
+
+  <g
+    stroke="url(#blueDeep)"
+    stroke-width="60"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  >
+    <line x1="448" y1="444" x2="352" y2="364" />
+    <line x1="448" y1="444" x2="598" y2="316" />
+  </g>
+  <circle cx="448" cy="444" r="42" fill="url(#blueDeep)" />
+
+  <rect
+    x="542"
+    y="556"
+    width="252"
+    height="228"
+    rx="52"
+    ry="52"
+    fill="#FFFFFF"
+    stroke="#DCE6F5"
+    stroke-width="10"
+  />
+
+  <rect
+    x="586"
+    y="614"
+    width="68"
+    height="68"
+    rx="20"
+    ry="20"
+    fill="url(#blueDeep)"
+  />
+  <line
+    x1="688"
+    y1="648"
+    x2="756"
+    y2="648"
+    stroke="#93B9FF"
+    stroke-width="40"
+    stroke-linecap="round"
+  />
+  <line
+    x1="586"
+    y1="720"
+    x2="716"
+    y2="720"
+    stroke="#C8DAFF"
+    stroke-width="36"
+    stroke-linecap="round"
+  />
+
+  <circle
+    cx="778"
+    cy="742"
+    r="88"
+    fill="url(#blueMain)"
+  />
+  <path
+    d="M736 742 L772 778 L828 716"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="34"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

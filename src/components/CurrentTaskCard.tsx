@@ -14,6 +14,10 @@ interface CurrentTaskCardProps {
   onOpenMiniWindow?: () => void;
   onPlanChange?: (plan: string) => void;
   onToggleMiniNeighborTasks?: () => void;
+  canAdvancePlan?: boolean;
+  canDeferPlan?: boolean;
+  onAdvancePlan?: () => void;
+  onDeferPlan?: () => void;
 }
 
 const timeFormatter = new Intl.DateTimeFormat('zh-CN', {
@@ -65,10 +69,46 @@ export function CurrentTaskCard({
   onOpenMiniWindow,
   onPlanChange,
   onToggleMiniNeighborTasks,
+  canAdvancePlan = false,
+  canDeferPlan = false,
+  onAdvancePlan,
+  onDeferPlan,
 }: CurrentTaskCardProps) {
   const miniPlanInputRef = useRef<HTMLTextAreaElement | null>(null);
   const hasPlan = Boolean(slot?.plan.trim());
   const hasActual = Boolean(slot?.actual.trim());
+  const showTimingActions = Boolean(onAdvancePlan || onDeferPlan);
+
+  function renderTimingButtons() {
+    return (
+      <>
+        <button
+          type="button"
+          disabled={!canAdvancePlan}
+          title="把下一段计划追加到当前段，并清空下一段计划"
+          aria-label="提前：把下一段计划追加到当前段，并清空下一段计划"
+          onClick={onAdvancePlan}
+        >
+          提前
+        </button>
+        <button
+          type="button"
+          disabled={!canDeferPlan}
+          title="把当前段计划追加到下一段，当前段计划保留"
+          aria-label="顺延：把当前段计划追加到下一段，当前段计划保留"
+          onClick={onDeferPlan}
+        >
+          顺延
+        </button>
+      </>
+    );
+  }
+
+  const timingActions = showTimingActions ? (
+    <div className="current-task-timing-actions" aria-label="调整当前任务计划">
+      {renderTimingButtons()}
+    </div>
+  ) : null;
 
   useLayoutEffect(() => {
     if (!compact || miniPlanInputRef.current === null) {
@@ -97,15 +137,21 @@ export function CurrentTaskCard({
             <div className="mini-current-task">
               <div className="mini-task-head">
                 <strong>{timeFormatter.format(now)}</strong>
-                <span className={`status-pill status-inline status-${slot.status}`}>
-                  {statusLabels[slot.status]}
-                </span>
+                <div className="mini-task-side">
+                  <span className={`status-pill status-inline status-${slot.status}`}>
+                    {statusLabels[slot.status]}
+                  </span>
+                </div>
               </div>
 
-              <div className="current-task-body mini-task-body">
+              <div className="mini-task-timing-row" aria-label="当前任务时间和调整按钮">
                 <span className="current-task-time">
                   {slot.start} - {slot.end}
                 </span>
+                {showTimingActions ? renderTimingButtons() : null}
+              </div>
+
+              <div className="current-task-body mini-task-body">
                 <textarea
                   ref={miniPlanInputRef}
                   className="mini-task-plan-input"
@@ -152,6 +198,7 @@ export function CurrentTaskCard({
             {hasPlan ? slot.plan : '这个时间格还没有填写计划'}
           </p>
           {hasActual ? <p className="current-task-actual">实际：{slot.actual}</p> : null}
+          {timingActions}
         </div>
       ) : (
         <p className="current-task-empty">当前任务只跟随今天显示。请回到今天后再查看当前半小时任务。</p>

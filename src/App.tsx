@@ -31,7 +31,7 @@ import {
   shouldExpandNightFoldForSlots,
 } from './lib/nightFold';
 import { readMiniNeighborPreference } from './lib/miniNeighborPreference';
-import { updateSlotPlanForDate } from './lib/planUpdates';
+import { applyTaskTimingAdjustment, updateSlotPlanForDate } from './lib/planUpdates';
 import { getTaskBlockNeighbors } from './lib/slotNeighbors';
 import { moveSelectedSlotPlans } from './lib/slotMoves';
 import { getDesktopBridge } from './lib/desktopBridge';
@@ -842,6 +842,18 @@ export function App() {
     );
   }
 
+  function advanceCurrentTaskPlan() {
+    setPlansByDate((previous) =>
+      applyTaskTimingAdjustment(previous, todayDateKey, currentSlotId, 'advance'),
+    );
+  }
+
+  function deferCurrentTaskPlan() {
+    setPlansByDate((previous) =>
+      applyTaskTimingAdjustment(previous, todayDateKey, currentSlotId, 'defer'),
+    );
+  }
+
   function toggleMiniNeighborTasks() {
     setShowMiniNeighborTasks((previous) => !previous);
   }
@@ -1206,6 +1218,10 @@ export function App() {
       ? {}
       : { '--workspace-content-height': `${workspaceContentHeight}px` }),
   } as CSSProperties;
+  const canAdvanceCurrentTaskPlan = Boolean(currentSlotNeighbors.next?.plan.trim());
+  const canDeferCurrentTaskPlan = Boolean(
+    currentSlotNeighbors.current?.plan.trim() && currentSlotNeighbors.next,
+  );
 
   if (isMiniView) {
     const canSetMiniAlwaysOnTop = Boolean(desktopBridge?.setMiniAlwaysOnTop);
@@ -1226,6 +1242,30 @@ export function App() {
             <span className="mini-back-icon" aria-hidden="true" />
           </button>
           <div className="mini-title-actions">
+            <button
+              type="button"
+              className={`mini-title-button mini-neighbor-title-button${
+                showMiniNeighborTasks ? ' active' : ''
+              }`}
+              aria-label={showMiniNeighborTasks ? '隐藏前后任务' : '显示前后任务'}
+              aria-pressed={showMiniNeighborTasks}
+              title={showMiniNeighborTasks ? '隐藏前后任务' : '显示前后任务'}
+              onClick={toggleMiniNeighborTasks}
+            >
+              <svg
+                className="mini-neighbor-title-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.3}
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M8 5.5h8" opacity="0.48" />
+                <path d="M5.5 12h13" />
+                <path d="M8 18.5h8" opacity="0.48" />
+              </svg>
+            </button>
             {canToggleStickyNote ? (
               <button
                 type="button"
@@ -1307,6 +1347,10 @@ export function App() {
           isViewingToday={true}
           compact
           onPlanChange={updateCurrentSlotPlan}
+          canAdvancePlan={canAdvanceCurrentTaskPlan}
+          canDeferPlan={canDeferCurrentTaskPlan}
+          onAdvancePlan={advanceCurrentTaskPlan}
+          onDeferPlan={deferCurrentTaskPlan}
         />
       </main>
     );
@@ -1316,6 +1360,7 @@ export function App() {
     <main className="app-shell">
       <DayHeader
         date={currentDate}
+        updateAction={<AppUpdatePanel />}
         onPreviousDay={() => moveDate(-1)}
         onNextDay={() => moveDate(1)}
         onToday={goToday}
@@ -1369,8 +1414,11 @@ export function App() {
             onOpenMiniWindow={openMiniWindow}
             showMiniNeighborTasks={showMiniNeighborTasks}
             onToggleMiniNeighborTasks={toggleMiniNeighborTasks}
+            canAdvancePlan={canAdvanceCurrentTaskPlan}
+            canDeferPlan={canDeferCurrentTaskPlan}
+            onAdvancePlan={advanceCurrentTaskPlan}
+            onDeferPlan={deferCurrentTaskPlan}
           />
-          <AppUpdatePanel />
           <SlotEditor
             slot={selectedEditorSlot}
             focusRequest={slotEditorFocusRequest}

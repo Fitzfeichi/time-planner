@@ -1,5 +1,8 @@
+import type { ReactNode } from 'react';
+
 interface DayHeaderProps {
   date: Date;
+  updateAction?: ReactNode;
   onPreviousDay: () => void;
   onNextDay: () => void;
   onToday: () => void;
@@ -15,7 +18,7 @@ const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
   day: 'numeric',
 });
 
-export function DayHeader({ date, onPreviousDay, onNextDay, onToday }: DayHeaderProps) {
+export function DayHeader({ date, updateAction, onPreviousDay, onNextDay, onToday }: DayHeaderProps) {
   return (
     <header className="day-header">
       <div>
@@ -24,7 +27,8 @@ export function DayHeader({ date, onPreviousDay, onNextDay, onToday }: DayHeader
         <p className="weekday">{weekdayFormatter.format(date)}</p>
       </div>
 
-      <nav className="day-actions" aria-label="日期切换">
+      <nav className="day-actions" aria-label="日期和软件操作">
+        {updateAction}
         <button type="button" onClick={onPreviousDay}>
           前一天
         </button>

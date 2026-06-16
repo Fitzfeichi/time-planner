@@ -112,19 +112,15 @@ export function AppUpdatePanel() {
   const isBusy = phase === 'checking' || phase === 'downloading' || phase === 'installing';
 
   return (
-    <section className="panel-block app-update-panel" aria-label="软件更新">
-      <div className="panel-title">
-        <strong>软件更新</strong>
-        <p>{message}</p>
-      </div>
-      <button
-        type="button"
-        className="update-check-button"
-        disabled={!isTauri.current || isBusy}
-        onClick={() => void checkForUpdate('manual')}
-      >
-        {isBusy ? '更新处理中' : '检查更新'}
-      </button>
-    </section>
+    <button
+      type="button"
+      className="update-check-button"
+      title={message}
+      aria-label="软件更新"
+      disabled={!isTauri.current || isBusy}
+      onClick={() => void checkForUpdate('manual')}
+    >
+      {isBusy ? '更新处理中' : '检查更新'}
+    </button>
   );
 }

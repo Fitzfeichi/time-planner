@@ -153,7 +153,9 @@ h1 {
 
 .day-actions button,
 .status-control button,
-.current-task-actions button {
+.current-task-actions button,
+.current-task-timing-actions button,
+.mini-task-timing-row button {
   min-height: 38px;
   border: 1px solid var(--color-hairline);
   border-radius: 999px;
@@ -166,7 +168,9 @@ h1 {
 
 .day-actions button:hover,
 .status-control button:hover,
-.current-task-actions button:hover {
+.current-task-actions button:hover,
+.current-task-timing-actions button:hover:not(:disabled),
+.mini-task-timing-row button:hover:not(:disabled) {
   border-color: rgba(0, 102, 204, 0.42);
   color: var(--color-primary);
 }
@@ -499,6 +503,14 @@ h1 {
   box-shadow: none;
 }
 
+.mini-neighbor-title-icon {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
 .mini-pin-icon {
   position: relative;
   z-index: 1;
@@ -512,7 +524,7 @@ h1 {
   align-items: flex-start;
   justify-content: space-between;
   min-width: 0;
-  gap: 10px;
+  gap: 12px;
 }
 
 .mini-task-head strong {
@@ -524,6 +536,12 @@ h1 {
 
 .current-task-card.compact.with-neighbors .mini-task-head strong {
   font-size: 30px;
+}
+
+.mini-task-side {
+  display: grid;
+  justify-items: end;
+  min-width: 0;
 }
 
 .current-task-head {
@@ -580,6 +598,16 @@ h1 {
   font-weight: 400;
 }
 
+.current-task-timing-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.current-task-timing-actions button {
+  min-width: 0;
+}
+
 .current-task-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -594,32 +622,8 @@ h1 {
   grid-column: 1 / -1;
 }
 
-.app-update-panel {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-}
-
-.app-update-panel .panel-title {
-  margin-bottom: 0;
-}
-
 .update-check-button {
-  align-self: start;
-  min-height: 38px;
-  width: 100%;
-  border: 1px solid var(--color-hairline);
-  border-radius: 999px;
-  background: var(--color-canvas);
-  color: var(--color-muted-strong);
-  padding: 0 16px;
-  font-size: 14px;
-  line-height: 1;
-}
-
-.update-check-button:hover:not(:disabled) {
-  border-color: rgba(0, 102, 204, 0.42);
-  color: var(--color-primary);
+  white-space: nowrap;
 }
 
 .update-check-button:disabled {
@@ -822,12 +826,14 @@ textarea:focus {
 }
 
 .mini-title-button:hover::before,
-.mini-pin-button.active::before {
+.mini-pin-button.active::before,
+.mini-neighbor-title-button.active::before {
   background: var(--color-primary-soft);
 }
 
 .mini-title-button:hover,
-.mini-pin-button.active {
+.mini-pin-button.active,
+.mini-neighbor-title-button.active {
   color: var(--color-primary);
 }
 
@@ -927,8 +933,31 @@ textarea:focus {
 }
 
 .mini-shell .current-task-time {
+  width: 100%;
   padding: 3px 8px;
+  text-align: center;
   font-size: 11px;
+}
+
+.mini-task-timing-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+
+.mini-task-timing-row .current-task-time,
+.mini-task-timing-row button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .mini-neighbor-task {
@@ -1002,6 +1031,19 @@ textarea:focus {
 .mini-shell .current-task-text {
   font-size: 16px;
   line-height: 1.45;
+}
+
+.mini-shell .current-task-timing-actions {
+  grid-template-columns: 1fr;
+  width: 100%;
+  gap: 6px;
+}
+
+.mini-shell .current-task-timing-actions button {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .mini-task-plan-input {

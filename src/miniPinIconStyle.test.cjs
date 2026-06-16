@@ -23,6 +23,14 @@ function miniPinSvg() {
   return match[0];
 }
 
+function miniNeighborTitleSvg() {
+  const match = appSource.match(/<svg\s+className="mini-neighbor-title-icon"[\s\S]*?<\/svg>/);
+
+  assert.ok(match, 'Missing mini neighbor title svg');
+
+  return match[0];
+}
+
 test('mini pin button uses default muted color and transparent background', () => {
   assert.match(cssBlock('.mini-title-button'), /color:\s*var\(--color-muted-strong\);/);
   assert.match(cssBlock('.mini-title-button::before'), /background:\s*transparent;/);
@@ -31,11 +39,11 @@ test('mini pin button uses default muted color and transparent background', () =
 test('mini pin button hover and active states use the existing blue treatment', () => {
   assert.match(
     styles,
-    /\.mini-title-button:hover::before,\s*\.mini-pin-button\.active::before\s*\{[^}]*background:\s*var\(--color-primary-soft\);/s,
+    /\.mini-title-button:hover::before,\s*\.mini-pin-button\.active::before,\s*\.mini-neighbor-title-button\.active::before\s*\{[^}]*background:\s*var\(--color-primary-soft\);/s,
   );
   assert.match(
     styles,
-    /\.mini-title-button:hover,\s*\.mini-pin-button\.active\s*\{[^}]*color:\s*var\(--color-primary\);/s,
+    /\.mini-title-button:hover,\s*\.mini-pin-button\.active,\s*\.mini-neighbor-title-button\.active\s*\{[^}]*color:\s*var\(--color-primary\);/s,
   );
 });
 
@@ -57,4 +65,22 @@ test('mini pin icon uses the traced pushpin svg with a heavier currentColor shap
   assert.doesNotMatch(iconBlock, /transform:/);
   assert.doesNotMatch(styles, /\.mini-pin-icon::before/);
   assert.doesNotMatch(styles, /\.mini-pin-icon::after/);
+});
+
+test('mini neighbor title icon uses a compact currentColor folded-lines svg', () => {
+  const iconBlock = cssBlock('.mini-neighbor-title-icon');
+  const svg = miniNeighborTitleSvg();
+
+  assert.match(svg, /<svg[^>]*className="mini-neighbor-title-icon"/);
+  assert.match(svg, /viewBox="0 0 24 24"/);
+  assert.match(svg, /stroke="currentColor"/);
+  assert.match(svg, /strokeWidth=\{2\.3\}/);
+  assert.match(svg, /strokeLinecap="round"/);
+  assert.match(svg, /d="M8 5\.5h8"/);
+  assert.match(svg, /d="M5\.5 12h13"/);
+  assert.match(svg, /d="M8 18\.5h8"/);
+  assert.doesNotMatch(svg, /<script|on\w+=|href=/i);
+  assert.match(iconBlock, /width:\s*16px;/);
+  assert.match(iconBlock, /height:\s*16px;/);
+  assert.match(iconBlock, /z-index:\s*1;/);
 });
