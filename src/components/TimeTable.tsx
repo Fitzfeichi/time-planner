@@ -588,8 +588,10 @@ export function TimeTable({
                 onPointerUp={row.canDrag ? handlePointerUp : undefined}
                 onPointerCancel={row.canDrag ? handlePointerCancel : undefined}
               >
-                <span className="slot-time">
-                  <span className="slot-day-prefix">{row.timePrefix}</span>
+                <span className={`slot-time${row.timePrefix === '' ? '' : ' with-day-prefix'}`}>
+                  {row.timePrefix === '' ? null : (
+                    <span className="slot-day-prefix">{row.timePrefix}</span>
+                  )}
                   <span className="slot-time-value">
                     {daySlot.start} - {displayEnd}
                   </span>
