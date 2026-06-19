@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 interface DayHeaderProps {
   date: Date;
   isViewingToday: boolean;
+  nightFoldAction?: ReactNode;
   updateAction?: ReactNode;
   onPreviousDay: () => void;
   onNextDay: () => void;
@@ -22,6 +23,7 @@ const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
 export function DayHeader({
   date,
   isViewingToday,
+  nightFoldAction,
   updateAction,
   onPreviousDay,
   onNextDay,
@@ -31,7 +33,10 @@ export function DayHeader({
     <header className="day-header">
       <div>
         <p className="eyebrow">半小时日计划</p>
-        <h1>{dateFormatter.format(date)}</h1>
+        <div className="day-title-row">
+          <h1>{dateFormatter.format(date)}</h1>
+          {nightFoldAction}
+        </div>
         <p className="weekday">{weekdayFormatter.format(date)}</p>
       </div>
 

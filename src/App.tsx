@@ -65,6 +65,7 @@ const WORKSPACE_RESIZE_KEYBOARD_STEP = 24;
 const SLOT_STATUSES: SlotStatus[] = ['empty', 'planned', 'done', 'changed'];
 type AppView = 'main' | 'mini' | 'sticky-note';
 type EditableSlotField = 'plan' | 'actual';
+type NightFoldExpansionMode = 'auto' | 'expanded' | 'collapsed';
 
 interface SlotEditorFocusRequest {
   field: EditableSlotField;
@@ -552,8 +553,8 @@ export function App() {
   );
   const [isMiniAlwaysOnTop, setIsMiniAlwaysOnTop] = useState(false);
   const [isStickyNoteOpen, setIsStickyNoteOpen] = useState(false);
-  const [isNightFoldManuallyExpanded, setIsNightFoldManuallyExpanded] = useState(
-    () => !isMiniView && isNightFoldSlot(initialSelectedSlotId),
+  const [nightFoldExpansionMode, setNightFoldExpansionMode] = useState<NightFoldExpansionMode>(
+    () => (!isMiniView && isNightFoldSlot(initialSelectedSlotId) ? 'expanded' : 'auto'),
   );
   const hasAutoScrolledToCurrentSlot = useRef(false);
   const miniShellRef = useRef<HTMLElement | null>(null);
@@ -595,7 +596,8 @@ export function App() {
   const isViewingToday = currentDateKey === todayDateKey;
   const nightFoldRange = dayPlan.nightFoldRange ?? DEFAULT_NIGHT_FOLD_RANGE;
   const isNightFoldExpanded =
-    isNightFoldManuallyExpanded || shouldExpandNightFoldForSlots(dayPlan.slots);
+    nightFoldExpansionMode === 'expanded' ||
+    (nightFoldExpansionMode !== 'collapsed' && shouldExpandNightFoldForSlots(dayPlan.slots));
   const currentVisibleSlotId =
     !isNightFoldExpanded && isViewingToday && isSlotInNightFoldRange(currentSlotId, nightFoldRange)
       ? nightFoldRange.startSlotId
@@ -696,15 +698,26 @@ export function App() {
       return;
     }
 
-    if (isNightFoldSlot(currentSlotId) && !isNightFoldExpanded) {
-      setIsNightFoldManuallyExpanded(true);
+    if (
+      nightFoldExpansionMode !== 'collapsed' &&
+      isNightFoldSlot(currentSlotId) &&
+      !isNightFoldExpanded
+    ) {
+      setNightFoldExpansionMode('expanded');
       return;
     }
 
     hasAutoScrolledToCurrentSlot.current = true;
 
     scrollSlotListToSecondVisibleRow(todayDateKey, currentVisibleSlotId);
-  }, [currentSlotId, currentVisibleSlotId, isMiniView, isNightFoldExpanded, todayDateKey]);
+  }, [
+    currentSlotId,
+    currentVisibleSlotId,
+    isMiniView,
+    isNightFoldExpanded,
+    nightFoldExpansionMode,
+    todayDateKey,
+  ]);
 
   useEffect(() => {
     setPlansByDate((previous) => {
@@ -955,7 +968,7 @@ export function App() {
     setSelectedSlotId(slotId);
     setSelectedSlotIds([slotId]);
     setSelectionAnchorSlotId(slotId);
-    setIsNightFoldManuallyExpanded(isNightFoldSlot(slotId));
+    setNightFoldExpansionMode(isNightFoldSlot(slotId) ? 'expanded' : 'auto');
   }
 
   function focusDatedSlotEditorField(dateKey: string, slotId: string, field: EditableSlotField) {
@@ -1002,7 +1015,7 @@ export function App() {
       ...previous,
       nightFoldRange: isDefaultNightFoldRange(nextRange) ? undefined : nextRange,
     }));
-    setIsNightFoldManuallyExpanded(false);
+    setNightFoldExpansionMode('auto');
   }
 
   function resetNightFoldRange() {
@@ -1016,7 +1029,11 @@ export function App() {
         nightFoldRange: undefined,
       };
     });
-    setIsNightFoldManuallyExpanded(false);
+    setNightFoldExpansionMode('auto');
+  }
+
+  function collapseNightFold() {
+    setNightFoldExpansionMode('collapsed');
   }
 
   function applySelectedSlotMerge() {
@@ -1111,7 +1128,7 @@ export function App() {
   }
 
   function moveDate(offset: number) {
-    setIsNightFoldManuallyExpanded(false);
+    setNightFoldExpansionMode('auto');
     setCurrentDate((previous) => {
       const next = new Date(previous);
       next.setDate(previous.getDate() + offset);
@@ -1120,7 +1137,7 @@ export function App() {
   }
 
   function goToday() {
-    setIsNightFoldManuallyExpanded(false);
+    setNightFoldExpansionMode('auto');
     setCurrentDate(new Date());
   }
 
@@ -1131,7 +1148,7 @@ export function App() {
     setSelectionAnchorSlotId(currentSlotId);
 
     if (isNightFoldSlot(currentSlotId)) {
-      setIsNightFoldManuallyExpanded(true);
+      setNightFoldExpansionMode('expanded');
     }
 
     scrollSlotListToSecondVisibleRow(todayDateKey, currentVisibleSlotId);
@@ -1451,6 +1468,17 @@ export function App() {
       <DayHeader
         date={currentDate}
         isViewingToday={isViewingToday}
+        nightFoldAction={
+          <button
+            type="button"
+            className="night-fold-toggle-button"
+            onClick={
+              isNightFoldExpanded ? collapseNightFold : () => setNightFoldExpansionMode('expanded')
+            }
+          >
+            {isNightFoldExpanded ? '夜间时间收起' : '夜间时间展开'}
+          </button>
+        }
         updateAction={<AppUpdatePanel onConfirmRequest={requestConfirmation} />}
         onPreviousDay={() => moveDate(-1)}
         onNextDay={() => moveDate(1)}
@@ -1480,7 +1508,6 @@ export function App() {
           onMoveSelectedPlans={moveSelectedPlans}
           onFoldSlotIntoNight={foldSlotIntoNight}
           onResetNightFoldRange={resetNightFoldRange}
-          onExpandNightFold={() => setIsNightFoldManuallyExpanded(true)}
         />
 
         <button

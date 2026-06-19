@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
+import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import { getMergedRangeForSlot, getMergedRangeSlotIds } from '../lib/mergedRanges';
 import {
   expandNightFoldRangeForAdjacentSlot,
@@ -49,7 +49,6 @@ interface TimeTableProps {
   onMoveSelectedPlans: (dragStartSlotId: string, insertIndex: number) => void;
   onFoldSlotIntoNight: (slotId: string) => void;
   onResetNightFoldRange: () => void;
-  onExpandNightFold: () => void;
 }
 
 export function TimeTable({
@@ -70,7 +69,6 @@ export function TimeTable({
   onMoveSelectedPlans,
   onFoldSlotIntoNight,
   onResetNightFoldRange,
-  onExpandNightFold,
 }: TimeTableProps) {
   const [draggedSlotId, setDraggedSlotId] = useState<string | null>(null);
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
@@ -138,7 +136,7 @@ export function TimeTable({
   }
 
   function getDropIndicator(
-    targetElement: HTMLButtonElement,
+    targetElement: HTMLElement,
     slotId: string,
     clientY: number,
     activeDraggedSlotId = draggedSlotId,
@@ -197,7 +195,7 @@ export function TimeTable({
     };
   }
 
-  function getSelectionMode(event: MouseEvent<HTMLButtonElement>): SlotSelectionMode {
+  function getSelectionMode(event: MouseEvent<HTMLElement>): SlotSelectionMode {
     if (event.shiftKey) {
       return 'range';
     }
@@ -209,7 +207,7 @@ export function TimeTable({
     return 'replace';
   }
 
-  function handleSlotClick(event: MouseEvent<HTMLButtonElement>, rowDateKey: string, slotId: string) {
+  function handleSlotClick(event: MouseEvent<HTMLElement>, rowDateKey: string, slotId: string) {
     if (didPointerDragRef.current) {
       didPointerDragRef.current = false;
       return;
@@ -222,9 +220,7 @@ export function TimeTable({
     );
   }
 
-  function getEditableFieldFromColumn(
-    event: MouseEvent<HTMLButtonElement>,
-  ): EditableSlotField | null {
+  function getEditableFieldFromColumn(event: MouseEvent<HTMLElement>): EditableSlotField | null {
     const planElement = event.currentTarget.querySelector<HTMLElement>('[data-edit-field="plan"]');
     const actualElement = event.currentTarget.querySelector<HTMLElement>(
       '[data-edit-field="actual"]',
@@ -251,7 +247,7 @@ export function TimeTable({
   }
 
   function handleSlotDoubleClick(
-    event: MouseEvent<HTMLButtonElement>,
+    event: MouseEvent<HTMLElement>,
     rowDateKey: string,
     slotId: string,
   ) {
@@ -284,7 +280,7 @@ export function TimeTable({
       };
     }
 
-    const targetButton = targetElement.closest<HTMLButtonElement>('.slot-row[data-slot-id]');
+    const targetButton = targetElement.closest<HTMLElement>('.slot-row[data-slot-id]');
 
     if (targetButton === null) {
       return null;
@@ -302,7 +298,7 @@ export function TimeTable({
     };
   }
 
-  function getPointerDropIndicator(event: PointerEvent<HTMLButtonElement>) {
+  function getPointerDropIndicator(event: PointerEvent<HTMLElement>) {
     const pointerDrag = pointerDragRef.current;
 
     if (pointerDrag === null) {
@@ -327,7 +323,7 @@ export function TimeTable({
     );
   }
 
-  function handlePointerDown(event: PointerEvent<HTMLButtonElement>, slotId: string) {
+  function handlePointerDown(event: PointerEvent<HTMLElement>, slotId: string) {
     if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey) {
       return;
     }
@@ -342,7 +338,7 @@ export function TimeTable({
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
-  function handlePointerMove(event: PointerEvent<HTMLButtonElement>) {
+  function handlePointerMove(event: PointerEvent<HTMLElement>) {
     const pointerDrag = pointerDragRef.current;
 
     if (pointerDrag === null || pointerDrag.pointerId !== event.pointerId) {
@@ -374,7 +370,7 @@ export function TimeTable({
     scrollListNearEdge(event.currentTarget, event.clientY);
   }
 
-  function handlePointerUp(event: PointerEvent<HTMLButtonElement>) {
+  function handlePointerUp(event: PointerEvent<HTMLElement>) {
     const pointerDrag = pointerDragRef.current;
 
     if (pointerDrag === null || pointerDrag.pointerId !== event.pointerId) {
@@ -405,21 +401,12 @@ export function TimeTable({
     clearDragState();
   }
 
-  function handlePointerCancel(event: PointerEvent<HTMLButtonElement>) {
+  function handlePointerCancel(event: PointerEvent<HTMLElement>) {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
 
     clearDragState();
-  }
-
-  function handleNightFoldKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== 'Enter' && event.key !== ' ') {
-      return;
-    }
-
-    event.preventDefault();
-    onExpandNightFold();
   }
 
   function handleResetNightFoldRange(event: MouseEvent<HTMLButtonElement>) {
@@ -495,8 +482,6 @@ export function TimeTable({
                   key={`${row.dateKey}-night-fold`}
                   data-date-key={row.dateKey}
                   data-night-fold-target="true"
-                  role="button"
-                  tabIndex={0}
                   className={[
                     'slot-row',
                     'night-fold-row',
@@ -505,8 +490,6 @@ export function TimeTable({
                   ]
                     .filter(Boolean)
                     .join(' ')}
-                  onClick={onExpandNightFold}
-                  onKeyDown={handleNightFoldKeyDown}
                 >
                   <span className="slot-time">
                     {slot.start} - {rangeEndSlot.end}
@@ -522,7 +505,7 @@ export function TimeTable({
                         恢复默认
                       </button>
                     ) : (
-                      '点击展开'
+                      null
                     )}
                   </span>
                   <span className="status-pill">夜间</span>
