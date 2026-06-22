@@ -469,7 +469,7 @@ function getSlotWithRangeTime(
   };
 }
 
-function getMergeConfirmationDetails(slots: TimeSlot[], selectedSlotIds: string[]) {
+function getMergeConfirmationDetails(slots: TimeSlot[], selectedSlotIds: string[], selectedSlotId: string) {
   const selectedSlots = slots.filter((slot) => selectedSlotIds.includes(slot.id));
 
   if (selectedSlots.length === 0) {
@@ -478,8 +478,20 @@ function getMergeConfirmationDetails(slots: TimeSlot[], selectedSlotIds: string[
 
   const firstSlot = selectedSlots[0];
   const lastSlot = selectedSlots[selectedSlots.length - 1];
+  const focusedSlot = slots.find((slot) => slot.id === selectedSlotId);
 
-  return `将合并 ${firstSlot.start} - ${lastSlot.end}，共 ${selectedSlots.length} 个时间格。`;
+  const lines: string[] = [];
+  lines.push(`将合并 ${firstSlot.start} - ${lastSlot.end}，共 ${selectedSlots.length} 个时间格。`);
+
+  if (focusedSlot && focusedSlot.plan.trim()) {
+    lines.push(`合并后计划：${focusedSlot.plan}`);
+  }
+
+  if (focusedSlot && focusedSlot.actual.trim()) {
+    lines.push(`合并后实际：${focusedSlot.actual}`);
+  }
+
+  return lines.join('\n');
 }
 
 function StickyNoteView() {
@@ -1113,7 +1125,7 @@ export function App() {
         title: '合并前确认',
         message:
           '这些时间格里已有不同内容。合并后会以当前右侧正在编辑的时间格为准，覆盖这一段的计划、实际和状态。',
-        details: getMergeConfirmationDetails(dayPlan.slots, selectedSlotIds),
+        details: getMergeConfirmationDetails(dayPlan.slots, selectedSlotIds, selectedSlotId),
         confirmLabel: '继续合并',
         cancelLabel: '取消',
         tone: 'warning',
