@@ -566,6 +566,21 @@ export function App() {
   const [isWorkspaceResizing, setIsWorkspaceResizing] = useState(false);
   const [confirmationRequest, setConfirmationRequest] = useState<ConfirmDialogContent | null>(null);
   const confirmationResolver = useRef<((confirmed: boolean) => void) | null>(null);
+  const [historyStack, setHistoryStack] = useState<PlansByDate[]>([]);
+
+  function saveToHistory() {
+    setHistoryStack((previous) => [...previous, JSON.parse(JSON.stringify(plansByDate))]);
+  }
+
+  function undo() {
+    if (historyStack.length === 0) {
+      return;
+    }
+
+    const previousState = historyStack[historyStack.length - 1];
+    setHistoryStack((previous) => previous.slice(0, -1));
+    setPlansByDate(previousState);
+  }
 
   const currentDateKey = getDateKey(currentDate);
   const todayDateKey = getDateKey(now);
@@ -796,6 +811,21 @@ export function App() {
   }, [isWorkspaceResizing]);
 
   useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'z') {
+        event.preventDefault();
+        undo();
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [historyStack]);
+
+  useEffect(() => {
     return () => {
       confirmationResolver.current?.(false);
       confirmationResolver.current = null;
@@ -868,6 +898,7 @@ export function App() {
         : getMergedRangeSlotIds(dayPlan.slots, mergedRange),
     );
 
+    saveToHistory();
     updatePlanForCurrentDate((previous) => ({
       ...previous,
       slots: previous.slots.map((slot) =>
@@ -884,6 +915,7 @@ export function App() {
   }
 
   function updateReview(review: string) {
+    saveToHistory();
     updatePlanForCurrentDate((previous) => ({
       ...previous,
       review,
@@ -897,14 +929,17 @@ export function App() {
   }
 
   function advanceCurrentTaskPlan() {
+    saveToHistory();
     setPlansByDate((previous) =>
       applyTaskTimingAdjustment(previous, todayDateKey, currentSlotId, 'advance'),
     );
   }
 
   function deferCurrentTaskPlan() {
+    saveToHistory();
+    const targetSlotId = currentSlot?.plan.trim() ? currentSlotId : currentSlotNeighbors.previous?.id ?? currentSlotId;
     setPlansByDate((previous) =>
-      applyTaskTimingAdjustment(previous, todayDateKey, currentSlotId, 'defer'),
+      applyTaskTimingAdjustment(previous, todayDateKey, targetSlotId, 'defer'),
     );
   }
 
@@ -994,6 +1029,7 @@ export function App() {
       return;
     }
 
+    saveToHistory();
     updatePlanForCurrentDate((previous) => ({
       ...previous,
       slots: moveResult.slots,
@@ -1011,6 +1047,7 @@ export function App() {
       return;
     }
 
+    saveToHistory();
     updatePlanForCurrentDate((previous) => ({
       ...previous,
       nightFoldRange: isDefaultNightFoldRange(nextRange) ? undefined : nextRange,
@@ -1019,6 +1056,7 @@ export function App() {
   }
 
   function resetNightFoldRange() {
+    saveToHistory();
     updatePlanForCurrentDate((previous) => {
       if (previous.nightFoldRange === undefined) {
         return previous;
@@ -1048,6 +1086,7 @@ export function App() {
       return;
     }
 
+    saveToHistory();
     updatePlanForCurrentDate((previous) => ({
       ...previous,
       slots: mergeResult.slots,
@@ -1103,6 +1142,7 @@ export function App() {
       return;
     }
 
+    saveToHistory();
     updatePlanForCurrentDate((previous) => ({
       ...previous,
       mergedRanges: splitResult.mergedRanges,
@@ -1119,6 +1159,7 @@ export function App() {
       return;
     }
 
+    saveToHistory();
     updatePlanForCurrentDate((previous) => ({
       ...previous,
       mergedRanges: removeMergedRangeForSlot(previous.mergedRanges, selectedSlotId),
@@ -1327,7 +1368,7 @@ export function App() {
   } as CSSProperties;
   const canAdvanceCurrentTaskPlan = Boolean(currentSlotNeighbors.next?.plan.trim());
   const canDeferCurrentTaskPlan = Boolean(
-    currentSlotNeighbors.current?.plan.trim() && currentSlotNeighbors.next,
+    (currentSlotNeighbors.current?.plan.trim() || currentSlotNeighbors.previous?.plan.trim()) && currentSlotNeighbors.next,
   );
 
   if (isMiniView) {

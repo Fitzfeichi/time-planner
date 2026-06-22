@@ -28,6 +28,7 @@ AGENTS.md
 DESIGN.md
 docs/PROJECT_MAP.md
 .codex-tmp/
+.trae/
 
 # Editor and OS files
 .vscode/
